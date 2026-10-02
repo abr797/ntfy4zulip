@@ -89,18 +89,32 @@ class ZulipDatabase:
         "zerver_subscription",
     )
 
-    def __init__(self, dsn: str, realm_anchor_user_id: int, delay_minutes: int = 3):
+    def __init__(
+        self,
+        dsn: str,
+        realm_anchor_user_id: int,
+        delay_minutes: int = 3,
+        timeout_seconds: int = 15,
+    ):
         self.dsn = dsn
         self.realm_anchor_user_id = realm_anchor_user_id
         self.delay_minutes = delay_minutes
+        self.timeout_seconds = timeout_seconds
+
+    def _configure_statement_timeout(self, conn: object) -> None:
+        conn.execute(  # type: ignore[attr-defined]
+            "SELECT set_config('statement_timeout', %s, true)",
+            (f"{self.timeout_seconds}s",),
+        )
 
     def validate_access(self) -> str:
         """Fail fast unless the connection is SELECT-only for required Zulip tables."""
         import psycopg
 
-        with psycopg.connect(self.dsn) as conn:
+        with psycopg.connect(self.dsn, connect_timeout=self.timeout_seconds) as conn:
             with conn.transaction():
                 conn.execute("SET TRANSACTION READ ONLY")
+                self._configure_statement_timeout(conn)
                 current_user = str(conn.execute("SELECT current_user").fetchone()[0])
 
                 for table in self.REQUIRED_TABLES:
@@ -161,9 +175,14 @@ class ZulipDatabase:
         import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(self.dsn, row_factory=dict_row) as conn:
+        with psycopg.connect(
+            self.dsn,
+            row_factory=dict_row,
+            connect_timeout=self.timeout_seconds,
+        ) as conn:
             with conn.transaction():
                 conn.execute("SET TRANSACTION READ ONLY")
+                self._configure_statement_timeout(conn)
                 with conn.cursor() as cur:
                     cur.execute(
                         UNREAD_NOTIFICATION_QUERY,
