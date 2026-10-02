@@ -1,5 +1,6 @@
 import os
 import unittest
+from pathlib import Path
 
 from ntfy4zulip.database import ZulipDatabase
 
@@ -237,6 +238,21 @@ class DatabaseIntegrationTests(unittest.TestCase):
     def test_real_postgresql_query_filters_and_maps_candidates(self):
         db = ZulipDatabase(DSN, realm_anchor_user_id=900, delay_minutes=3)
         self.assert_candidate_set(db.fetch_candidates())
+
+    def test_reference_sql_file_executes_without_placeholders(self):
+        import psycopg
+        from psycopg.rows import dict_row
+
+        sql_path = Path(__file__).resolve().parents[1] / "sql" / "unread_notifications.sql"
+        sql = sql_path.read_text(encoding="utf-8")
+        with psycopg.connect(DSN, row_factory=dict_row) as conn:
+            rows = conn.execute(sql).fetchall()
+
+        pairs = {(int(row["message_id"]), int(row["target_user_id"])) for row in rows}
+        self.assertEqual(
+            pairs,
+            {(1001, 2), (1005, 2), (1006, 2), (1006, 3)},
+        )
 
     @unittest.skipUnless(READONLY_DSN, "TEST_READONLY_POSTGRES_DSN is not set")
     def test_select_only_role_can_run_poller_query_but_cannot_write(self):
