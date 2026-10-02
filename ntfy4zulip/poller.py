@@ -39,6 +39,8 @@ class NotificationPoller:
 
         seen: set[tuple[int, int]] = set()
         tasks: list[asyncio.Task[bool]] = []
+        build_failures = 0
+
         for candidate in candidates:
             key = (candidate.message_id, candidate.target_user_id)
             if key in seen:
@@ -46,33 +48,59 @@ class NotificationPoller:
                 continue
             seen.add(key)
 
-            topic = topic_for_user(candidate.target_user_id, self.topic_secret, self.topic_prefix)
-            title, message = notification_text(candidate, self.preview_chars)
-            click = candidate_message_url(self.zulip_site, candidate)
+            try:
+                topic = topic_for_user(
+                    candidate.target_user_id,
+                    self.topic_secret,
+                    self.topic_prefix,
+                )
+                title, message = notification_text(candidate, self.preview_chars)
+                click = candidate_message_url(self.zulip_site, candidate)
+            except Exception:
+                build_failures += 1
+                logger.exception(
+                    "failed to build notification: message=%s user=%s",
+                    candidate.message_id,
+                    candidate.target_user_id,
+                )
+                continue
+
             tasks.append(
                 asyncio.create_task(
-                    self.ntfy.send(topic=topic, title=title, message=message, click=click)
+                    self.ntfy.send(
+                        topic=topic,
+                        title=title,
+                        message=message,
+                        click=click,
+                    )
                 )
             )
 
         if not tasks:
-            return 0, 0
+            return 0, build_failures
+
         results = await asyncio.gather(*tasks)
         sent = sum(1 for result in results if result)
-        failed = len(results) - sent
+        failed = len(results) - sent + build_failures
         logger.info("notification scan completed sent=%d failed=%d", sent, failed)
         return sent, failed
 
     async def run(self, stop_event: asyncio.Event) -> None:
         while not stop_event.is_set():
             try:
-                await asyncio.wait_for(stop_event.wait(), timeout=self._seconds_until_next_tick())
+                await asyncio.wait_for(
+                    stop_event.wait(),
+                    timeout=self._seconds_until_next_tick(),
+                )
                 continue
             except asyncio.TimeoutError:
                 pass
+
             try:
                 await self.scan_once()
             except Exception:
+                # Stateless failure semantics: this bucket is intentionally lost,
+                # but the process stays alive and the next minute is still scanned.
                 logger.exception("notification scan failed; bucket will not be retried")
 
     def _seconds_until_next_tick(self) -> float:
