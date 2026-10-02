@@ -84,13 +84,26 @@ async def run(config: Config) -> None:
             asyncio.create_task(bot.run(stop_event), name="enrollment-bot"),
         }
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        fatal_error: BaseException | None = None
+
         for task in done:
             if task.cancelled():
                 continue
             exc = task.exception()
             if exc is not None:
                 logger.error("task %s failed", task.get_name(), exc_info=exc)
+                fatal_error = exc
                 stop_event.set()
+            elif not stop_event.is_set():
+                fatal_error = RuntimeError(
+                    f"task {task.get_name()} stopped unexpectedly without shutdown"
+                )
+                logger.error("%s", fatal_error)
+                stop_event.set()
+
         for task in pending:
             task.cancel()
         await asyncio.gather(*pending, return_exceptions=True)
+
+        if fatal_error is not None:
+            raise fatal_error
