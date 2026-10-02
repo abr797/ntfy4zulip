@@ -50,7 +50,7 @@ Any 1:1 DM to the configured Generic bot causes the bot to:
 2. publish a test notification to it immediately;
 3. reply in Zulip with the ntfy server address and topic.
 
-Channel messages and group DMs to the bot are ignored. Repeating the DM returns the same topic and sends another test push, making the bot a simple self-service diagnostic endpoint.
+Channel messages and group DMs to the bot are ignored. Repeating the DM returns the same topic and sends another test push, making the bot a simple self-service diagnostic endpoint. The bot can remain a normal Generic bot; organization-admin privileges are not required in DB-backed mode.
 
 ## Install
 
@@ -61,6 +61,7 @@ python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .
 cp .env.example .env
+cp zuliprc.example zuliprc
 ```
 
 Keep the bot's normal `zuliprc` in the project directory or set `ZULIPRC_PATH`. At startup the service calls `GET /users/me` once to obtain the bot `user_id`; the DB query uses that ID only to determine the bot's realm.
@@ -93,7 +94,7 @@ push_bridge_user:   zulip_* -> write-only
 
 Thus a high-entropy topic is a capability secret: a phone needs only the topic to subscribe, anonymous users cannot publish forged notifications, and the bridge cannot read users' cached notifications.
 
-Exact setup commands and security tradeoffs are in [docs/ntfy-acl.md](docs/ntfy-acl.md). Do **not** use the legacy pattern of one shared employee account with read access to all topics.
+Exact setup commands and security tradeoffs are in [docs/ntfy-acl.md](docs/ntfy-acl.md). If you change `NTFY_TOPIC_PREFIX`, change the ntfy ACL wildcard accordingly. Do **not** use the legacy pattern of one shared employee account with read access to all topics.
 
 A short ntfy cache such as 15 minutes is suitable for this project: it lets the onboarding test push survive the few seconds before a user subscribes and tolerates brief phone disconnects without replaying hour-old notifications.
 
