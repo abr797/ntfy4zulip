@@ -32,6 +32,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.ntfy_topic_prefix, "zulip")
         self.assertEqual(config.poll_interval_seconds, 60)
         self.assertEqual(config.notification_delay_minutes, 3)
+        self.assertEqual(config.db_timeout_seconds, 15)
 
     def test_missing_topic_secret_is_rejected(self):
         base = self.make_base()
@@ -74,6 +75,13 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             with patch("pathlib.Path.cwd", return_value=Path(temp)):
                 self.assertEqual(_base_dir(), Path(temp))
+
+    def test_invalid_database_timeout_is_rejected(self):
+        base = self.make_base()
+        env = self.valid_env() | {"DB_TIMEOUT_SECONDS": "0"}
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(ValueError, "DB_TIMEOUT_SECONDS"):
+                load_config(base)
 
     def test_missing_zuliprc_is_rejected(self):
         temp = tempfile.TemporaryDirectory()
