@@ -1,2 +1,1 @@
-# Convenience installer for development and deployment.
--e .
+.
