@@ -80,10 +80,64 @@ def _candidate_from_row(row: Mapping[str, object]) -> NotificationCandidate:
 
 
 class ZulipDatabase:
+    REQUIRED_TABLES = (
+        "zerver_message",
+        "zerver_usermessage",
+        "zerver_userprofile",
+        "zerver_recipient",
+        "zerver_stream",
+        "zerver_subscription",
+    )
+
     def __init__(self, dsn: str, realm_anchor_user_id: int, delay_minutes: int = 3):
         self.dsn = dsn
         self.realm_anchor_user_id = realm_anchor_user_id
         self.delay_minutes = delay_minutes
+
+    def validate_access(self) -> str:
+        """Fail fast unless the connection is SELECT-only for required Zulip tables."""
+        import psycopg
+
+        with psycopg.connect(self.dsn) as conn:
+            with conn.transaction():
+                conn.execute("SET TRANSACTION READ ONLY")
+                current_user = str(conn.execute("SELECT current_user").fetchone()[0])
+
+                for table in self.REQUIRED_TABLES:
+                    select_ok = bool(
+                        conn.execute(
+                            "SELECT has_table_privilege(current_user, %s, 'SELECT')",
+                            (table,),
+                        ).fetchone()[0]
+                    )
+                    if not select_ok:
+                        raise RuntimeError(
+                            f"PostgreSQL role {current_user!r} lacks SELECT on {table}"
+                        )
+
+                    for privilege in ("INSERT", "UPDATE", "DELETE"):
+                        has_write = bool(
+                            conn.execute(
+                                "SELECT has_table_privilege(current_user, %s, %s)",
+                                (table, privilege),
+                            ).fetchone()[0]
+                        )
+                        if has_write:
+                            raise RuntimeError(
+                                f"PostgreSQL role {current_user!r} has forbidden "
+                                f"{privilege} privilege on {table}"
+                            )
+
+                realm_exists = conn.execute(
+                    "SELECT EXISTS(SELECT 1 FROM zerver_userprofile WHERE id = %s)",
+                    (self.realm_anchor_user_id,),
+                ).fetchone()[0]
+                if not realm_exists:
+                    raise RuntimeError(
+                        "Configured Zulip bot user_id is not visible in PostgreSQL"
+                    )
+
+        return current_user
 
     def fetch_candidates(self) -> list[NotificationCandidate]:
         import psycopg
