@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ntfy4zulip.config import load_config
+from ntfy4zulip.config import _base_dir, load_config
 
 
 class ConfigTests(unittest.TestCase):
@@ -52,6 +52,28 @@ class ConfigTests(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             with self.assertRaisesRegex(ValueError, "must be 60"):
                 load_config(base)
+
+    def test_invalid_ntfy_url_is_rejected(self):
+        base = self.make_base()
+        env = self.valid_env() | {"NTFY_HOST": "not-a-url"}
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(ValueError, "NTFY_HOST"):
+                load_config(base)
+
+    def test_invalid_zulip_site_is_rejected(self):
+        base = self.make_base()
+        (base / "zuliprc").write_text(
+            "[api]\nsite=zulip.example\nemail=bot@example.com\nkey=test\n",
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, self.valid_env(), clear=True):
+            with self.assertRaisesRegex(ValueError, "Zulip site"):
+                load_config(base)
+
+    def test_default_base_dir_is_current_working_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with patch("pathlib.Path.cwd", return_value=Path(temp)):
+                self.assertEqual(_base_dir(), Path(temp))
 
     def test_missing_zuliprc_is_rejected(self):
         temp = tempfile.TemporaryDirectory()
