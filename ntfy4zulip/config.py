@@ -3,6 +3,7 @@ from __future__ import annotations
 import configparser
 import os
 import sys
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,7 +29,9 @@ class Config:
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parents[1]
+    # Installed console scripts must resolve .env/zuliprc relative to where the
+    # service is launched, not relative to site-packages.
+    return Path.cwd()
 
 
 def _require_env(name: str) -> str:
@@ -46,6 +49,14 @@ def _positive_int(name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer") from exc
     if value <= 0:
         raise ValueError(f"{name} must be > 0")
+    return value
+
+
+def _http_url(name: str, value: str) -> str:
+    value = value.strip().rstrip("/")
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"{name} must be an absolute http(s) URL")
     return value
 
 
@@ -73,7 +84,7 @@ def load_config(base_dir: Path | None = None) -> Config:
     if not parser.has_option("api", "site"):
         raise ValueError(f"Missing [api] site in {zuliprc_path}")
 
-    zulip_site = parser.get("api", "site").strip().rstrip("/")
+    zulip_site = _http_url("Zulip site", parser.get("api", "site"))
     topic_secret = _require_env("TOPIC_SECRET")
     if len(topic_secret.encode("utf-8")) < 32:
         raise ValueError("TOPIC_SECRET must contain at least 32 bytes")
@@ -86,7 +97,7 @@ def load_config(base_dir: Path | None = None) -> Config:
         zulip_site=zulip_site,
         zuliprc_path=zuliprc_path,
         zulip_db_dsn=_require_env("ZULIP_DB_DSN"),
-        ntfy_host=os.getenv("NTFY_HOST", "https://ntfy.sh").strip().rstrip("/"),
+        ntfy_host=_http_url("NTFY_HOST", os.getenv("NTFY_HOST", "https://ntfy.sh")),
         ntfy_auth_token=os.getenv("NTFY_AUTH_TOKEN", "").strip() or None,
         ntfy_topic_prefix=os.getenv("NTFY_TOPIC_PREFIX", "zulip").strip().strip("_-") or "zulip",
         topic_secret=topic_secret,
