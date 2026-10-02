@@ -206,6 +206,7 @@ class DatabaseIntegrationTests(unittest.TestCase):
         ):
             cur.execute(f"DROP TABLE IF EXISTS {table}")
         if READONLY_DSN:
+            cur.execute("DROP OWNED BY ntfy4zulip_reader_test")
             cur.execute("DROP ROLE IF EXISTS ntfy4zulip_reader_test")
         cur.close()
         cls.conn.close()
@@ -245,7 +246,7 @@ class DatabaseIntegrationTests(unittest.TestCase):
         db = ZulipDatabase(READONLY_DSN, realm_anchor_user_id=900, delay_minutes=3)
         self.assert_candidate_set(db.fetch_candidates())
 
-        with psycopg.connect(READONLY_DSN) as conn:
+        with psycopg.connect(READONLY_DSN, autocommit=True) as conn:
             with self.assertRaises(InsufficientPrivilege):
                 conn.execute(
                     """
