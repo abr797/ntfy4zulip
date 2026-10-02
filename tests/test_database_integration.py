@@ -260,6 +260,7 @@ class DatabaseIntegrationTests(unittest.TestCase):
         from psycopg.errors import InsufficientPrivilege
 
         db = ZulipDatabase(READONLY_DSN, realm_anchor_user_id=900, delay_minutes=3)
+        self.assertEqual(db.validate_access(), "ntfy4zulip_reader_test")
         self.assert_candidate_set(db.fetch_candidates())
 
         with psycopg.connect(READONLY_DSN, autocommit=True) as conn:
@@ -271,3 +272,14 @@ class DatabaseIntegrationTests(unittest.TestCase):
                     VALUES (9999, 1, 'should fail', TRUE, FALSE)
                     """
                 )
+
+    def test_startup_validation_rejects_write_capable_role(self):
+        db = ZulipDatabase(DSN, realm_anchor_user_id=900, delay_minutes=3)
+        with self.assertRaisesRegex(RuntimeError, "forbidden .* privilege"):
+            db.validate_access()
+
+    @unittest.skipUnless(READONLY_DSN, "TEST_READONLY_POSTGRES_DSN is not set")
+    def test_startup_validation_rejects_unknown_bot_user(self):
+        db = ZulipDatabase(READONLY_DSN, realm_anchor_user_id=999999, delay_minutes=3)
+        with self.assertRaisesRegex(RuntimeError, "bot user_id"):
+            db.validate_access()
