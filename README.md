@@ -59,14 +59,14 @@ Python 3.11+ is supported.
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e .
+pip install .
 cp .env.example .env
 cp zuliprc.example zuliprc
 ```
 
-Keep the bot's normal `zuliprc` in the project directory or set `ZULIPRC_PATH`. At startup the service calls `GET /users/me` once to obtain the bot `user_id`; the DB query uses that ID only to determine the bot's realm.
+`ntfy4zulip` loads `.env` and the default `zuliprc` from the current working directory (systemd uses `/opt/ntfy4zulip`), or you can set `ZULIPRC_PATH` explicitly. Keep the bot's normal `zuliprc` there. At startup the service calls `GET /users/me` once to obtain the bot `user_id`; the DB query uses that ID only to determine the bot's realm.
 
-Create a dedicated PostgreSQL account with **SELECT-only** privileges. See `sql/readonly_role.example.sql`.
+Create a dedicated PostgreSQL account with **SELECT-only** privileges. See `sql/readonly_role.example.sql`. Startup fails fast if required SELECT privileges are missing or if that role has table-write/public-schema CREATE privileges.
 
 Validate local configuration without connecting to any service:
 
