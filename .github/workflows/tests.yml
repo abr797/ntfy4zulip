@@ -46,7 +46,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/ntfy4zulip_test\n      TEST_READONLY_POSTGRES_DSN: postgresql://ntfy4zulip_reader_test:reader-test-password@127.0.0.1:5432/ntfy4zulip_test
+      TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/ntfy4zulip_test
+      TEST_READONLY_POSTGRES_DSN: postgresql://ntfy4zulip_reader_test:reader-test-password@127.0.0.1:5432/ntfy4zulip_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
