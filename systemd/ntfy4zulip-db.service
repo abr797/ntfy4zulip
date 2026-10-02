@@ -9,13 +9,20 @@ User=zulip-push
 Group=zulip-push
 WorkingDirectory=/opt/ntfy4zulip
 EnvironmentFile=/opt/ntfy4zulip/.env
-ExecStart=/opt/ntfy4zulip/.venv/bin/python /opt/ntfy4zulip/run_db.py
+ExecStart=/opt/ntfy4zulip/.venv/bin/ntfy4zulip
 Restart=always
 RestartSec=10
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
