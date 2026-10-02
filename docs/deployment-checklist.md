@@ -15,6 +15,9 @@ to a production Zulip server.
 - [x] One malformed candidate does not prevent delivery of other candidates.
 - [x] Poller exits cleanly when its stop event is set.
 - [x] The actual production SQL executes against PostgreSQL 16 in CI.
+- [x] CI creates a separate SELECT-only PostgreSQL login, runs the production poller under it, and proves INSERT is denied.
+- [x] Startup privilege validation accepts the SELECT-only role and rejects a write-capable role or unknown bot user.
+- [x] PostgreSQL connect/statement duration is bounded by configuration.
 - [x] Synthetic SQL fixtures cover read/unread, sender exclusion, age window,
       active/bot filtering, realm isolation, 1:1 DM, group DM and channel metadata.
 - [x] Python package builds as wheel/sdist.
@@ -29,7 +32,7 @@ environment:
 
 - [ ] Run `sql/unread_notifications.sql` read-only against the real Zulip Server
       12.2 database and compare a few rows with the Zulip UI.
-- [ ] Confirm the production PostgreSQL role cannot INSERT/UPDATE/DELETE.
+- [ ] Confirm the production PostgreSQL role passes ntfy4zulip startup validation and cannot write to Zulip tables/schema.
 - [ ] Send a 1:1 DM to the real enrollment bot and receive its instruction reply.
 - [ ] Subscribe a real ntfy phone/client to the returned topic and receive the test push.
 - [ ] Verify a channel message read within 3 minutes produces no push.
