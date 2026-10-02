@@ -1,0 +1,13 @@
+.venv
+.env
+
+zuliprc*
+
+__pycache__/
+*.py[cod]
+.coverage
+
+dist/
+build/
+.idea/
+notes.md*
