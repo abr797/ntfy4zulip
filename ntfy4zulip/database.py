@@ -115,7 +115,14 @@ class ZulipDatabase:
                             f"PostgreSQL role {current_user!r} lacks SELECT on {table}"
                         )
 
-                    for privilege in ("INSERT", "UPDATE", "DELETE"):
+                    for privilege in (
+                        "INSERT",
+                        "UPDATE",
+                        "DELETE",
+                        "TRUNCATE",
+                        "REFERENCES",
+                        "TRIGGER",
+                    ):
                         has_write = bool(
                             conn.execute(
                                 "SELECT has_table_privilege(current_user, %s, %s)",
@@ -127,6 +134,17 @@ class ZulipDatabase:
                                 f"PostgreSQL role {current_user!r} has forbidden "
                                 f"{privilege} privilege on {table}"
                             )
+
+                schema_create = bool(
+                    conn.execute(
+                        "SELECT has_schema_privilege(current_user, 'public', 'CREATE')"
+                    ).fetchone()[0]
+                )
+                if schema_create:
+                    raise RuntimeError(
+                        f"PostgreSQL role {current_user!r} has forbidden CREATE "
+                        "privilege on public schema"
+                    )
 
                 realm_exists = conn.execute(
                     "SELECT EXISTS(SELECT 1 FROM zerver_userprofile WHERE id = %s)",
