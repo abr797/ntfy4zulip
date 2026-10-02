@@ -24,6 +24,7 @@ class Config:
     ntfy_concurrency: int = 20
     ntfy_timeout_seconds: float = 10.0
     message_preview_chars: int = 800
+    db_timeout_seconds: int = 15
 
 
 def _base_dir() -> Path:
@@ -106,4 +107,5 @@ def load_config(base_dir: Path | None = None) -> Config:
         ntfy_concurrency=_positive_int("NTFY_CONCURRENCY", 20),
         ntfy_timeout_seconds=_positive_float("NTFY_TIMEOUT_SECONDS", 10.0),
         message_preview_chars=_positive_int("MESSAGE_PREVIEW_CHARS", 800),
+        db_timeout_seconds=_positive_int("DB_TIMEOUT_SECONDS", 15),
     )
