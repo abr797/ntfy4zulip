@@ -4,6 +4,7 @@ import unittest
 from ntfy4zulip.database import ZulipDatabase
 
 DSN = os.getenv("TEST_POSTGRES_DSN")
+READONLY_DSN = os.getenv("TEST_READONLY_POSTGRES_DSN")
 
 
 @unittest.skipUnless(DSN, "TEST_POSTGRES_DSN is not set")
@@ -170,6 +171,26 @@ class DatabaseIntegrationTests(unittest.TestCase):
                 (7, 1009, 0)
             """
         )
+
+        if READONLY_DSN:
+            cur.execute("DROP ROLE IF EXISTS ntfy4zulip_reader_test")
+            cur.execute(
+                "CREATE ROLE ntfy4zulip_reader_test LOGIN PASSWORD 'reader-test-password'"
+            )
+            cur.execute("GRANT CONNECT ON DATABASE ntfy4zulip_test TO ntfy4zulip_reader_test")
+            cur.execute("GRANT USAGE ON SCHEMA public TO ntfy4zulip_reader_test")
+            cur.execute(
+                """
+                GRANT SELECT ON TABLE
+                    zerver_message,
+                    zerver_usermessage,
+                    zerver_userprofile,
+                    zerver_recipient,
+                    zerver_stream,
+                    zerver_subscription
+                TO ntfy4zulip_reader_test
+                """
+            )
         cur.close()
 
     @classmethod
@@ -184,13 +205,12 @@ class DatabaseIntegrationTests(unittest.TestCase):
             "zerver_userprofile",
         ):
             cur.execute(f"DROP TABLE IF EXISTS {table}")
+        if READONLY_DSN:
+            cur.execute("DROP ROLE IF EXISTS ntfy4zulip_reader_test")
         cur.close()
         cls.conn.close()
 
-    def test_real_postgresql_query_filters_and_maps_candidates(self):
-        db = ZulipDatabase(DSN, realm_anchor_user_id=900, delay_minutes=3)
-        candidates = db.fetch_candidates()
-
+    def assert_candidate_set(self, candidates):
         pairs = {(item.message_id, item.target_user_id) for item in candidates}
         self.assertEqual(
             pairs,
@@ -207,7 +227,30 @@ class DatabaseIntegrationTests(unittest.TestCase):
         self.assertEqual(dm.dm_user_ids, (1, 2))
 
         group_dm = next(
-            item for item in candidates
+            item
+            for item in candidates
             if item.message_id == 1006 and item.target_user_id == 2
         )
         self.assertEqual(group_dm.dm_user_ids, (1, 2, 3))
+
+    def test_real_postgresql_query_filters_and_maps_candidates(self):
+        db = ZulipDatabase(DSN, realm_anchor_user_id=900, delay_minutes=3)
+        self.assert_candidate_set(db.fetch_candidates())
+
+    @unittest.skipUnless(READONLY_DSN, "TEST_READONLY_POSTGRES_DSN is not set")
+    def test_select_only_role_can_run_poller_query_but_cannot_write(self):
+        import psycopg
+        from psycopg.errors import InsufficientPrivilege
+
+        db = ZulipDatabase(READONLY_DSN, realm_anchor_user_id=900, delay_minutes=3)
+        self.assert_candidate_set(db.fetch_candidates())
+
+        with psycopg.connect(READONLY_DSN) as conn:
+            with self.assertRaises(InsufficientPrivilege):
+                conn.execute(
+                    """
+                    INSERT INTO zerver_userprofile
+                        (id, realm_id, full_name, is_active, is_bot)
+                    VALUES (9999, 1, 'should fail', TRUE, FALSE)
+                    """
+                )
