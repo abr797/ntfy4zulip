@@ -1,0 +1,21 @@
+[Unit]
+Description=ntfy4zulip DB-backed unread notification bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zulip-push
+Group=zulip-push
+WorkingDirectory=/opt/zulip-ntfy
+EnvironmentFile=/opt/zulip-ntfy/.env
+ExecStart=/opt/zulip-ntfy/.venv/bin/python /opt/zulip-ntfy/run_db.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
