@@ -1,7 +1,9 @@
 .venv
 .env
 
-zuliprc*
+zuliprc
+zuliprc.local
+zuliprc.*.local
 
 __pycache__/
 *.py[cod]
@@ -9,5 +11,6 @@ __pycache__/
 
 dist/
 build/
+*.egg-info/
 .idea/
 notes.md*
