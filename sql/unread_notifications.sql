@@ -1,7 +1,10 @@
--- Reference query for Zulip Server 12.2.
--- Production code uses the equivalent query in ntfy4zulip/database.py.
--- $1 = notification delay in whole minutes (default: 3).
--- $2 = Zulip bot user_id; its realm scopes the query to one organization.
+-- Directly runnable reference query for Zulip Server 12.2.
+-- Edit the two values in params before running against a real installation.
+WITH params AS (
+    SELECT
+        3::integer AS delay_minutes,
+        900::bigint AS bot_user_id
+)
 SELECT
     m.id AS message_id,
     m.date_sent,
@@ -32,11 +35,12 @@ LEFT JOIN zerver_stream AS stream
     ON m.is_channel_message
    AND recipient.type = 2
    AND stream.id = recipient.type_id
+CROSS JOIN params AS p
 WHERE
     m.date_sent >= date_trunc('minute', CURRENT_TIMESTAMP)
-                   - ($1 + 1) * INTERVAL '1 minute'
+                   - (p.delay_minutes + 1) * INTERVAL '1 minute'
     AND m.date_sent < date_trunc('minute', CURRENT_TIMESTAMP)
-                      - $1 * INTERVAL '1 minute'
+                      - p.delay_minutes * INTERVAL '1 minute'
     AND (um.flags & 1) = 0
     AND um.user_profile_id <> m.sender_id
     AND target.is_active = TRUE
@@ -44,6 +48,6 @@ WHERE
     AND m.realm_id = (
         SELECT realm_id
         FROM zerver_userprofile
-        WHERE id = $2
+        WHERE id = p.bot_user_id
     )
 ORDER BY m.id, um.user_profile_id;
