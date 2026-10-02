@@ -1,13 +1,2 @@
-# Zulip bot API (enrollment bot)
-zulip==0.9.1
-
-# HTTP / configuration
-aiohttp
-python-dotenv
-urllib3
-
-# DB-backed mode (Zulip PostgreSQL read-only)
-psycopg[binary]>=3.2,<4
-
-# Optional binary build
-pyinstaller
+# Convenience installer for development and deployment.
+-e .
