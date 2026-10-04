@@ -17,7 +17,8 @@ class Config:
     zuliprc_path: Path
     zulip_db_dsn: str
     zulip_db_schema: str
-    ntfy_host: str
+    ntfy_publish_url: str
+    ntfy_public_url: str | None
     ntfy_auth_token: str | None
     ntfy_topic_prefix: str
     topic_secret: str
@@ -106,12 +107,24 @@ def load_config(base_dir: Path | None = None) -> Config:
     if poll_interval_seconds != 60:
         raise ValueError("POLL_INTERVAL_SECONDS must be 60 in stateless bucket mode")
 
+    legacy_ntfy_host = os.getenv("NTFY_HOST", "").strip()
+    ntfy_publish_raw = os.getenv("NTFY_PUBLISH_URL", "").strip() or legacy_ntfy_host
+    if not ntfy_publish_raw:
+        ntfy_publish_raw = "https://ntfy.sh"
+
+    ntfy_public_raw = os.getenv("NTFY_PUBLIC_URL", "").strip() or legacy_ntfy_host
+
     return Config(
         zulip_site=zulip_site,
         zuliprc_path=zuliprc_path,
         zulip_db_dsn=_require_env("ZULIP_DB_DSN"),
         zulip_db_schema=_db_schema(os.getenv("ZULIP_DB_SCHEMA", "public")),
-        ntfy_host=_http_url("NTFY_HOST", os.getenv("NTFY_HOST", "https://ntfy.sh")),
+        ntfy_publish_url=_http_url("NTFY_PUBLISH_URL", ntfy_publish_raw),
+        ntfy_public_url=(
+            _http_url("NTFY_PUBLIC_URL", ntfy_public_raw)
+            if ntfy_public_raw
+            else None
+        ),
         ntfy_auth_token=os.getenv("NTFY_AUTH_TOKEN", "").strip() or None,
         ntfy_topic_prefix=os.getenv("NTFY_TOPIC_PREFIX", "zulip").strip().strip("_-") or "zulip",
         topic_secret=topic_secret,
