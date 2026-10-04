@@ -1,0 +1,7 @@
+[api]
+site=https://zulip.example
+email=ntfy4zulip-bot@zulip.example
+key=replace-with-generic-bot-api-key
+
+# The DB-backed mode does not require this bot to be an organization administrator.
+# It only needs to receive/reply to its own 1:1 direct messages.

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ntfy4zulip"
+version = "0.1.0"
+description = "Stateless ntfy notifications for unread messages in self-hosted Zulip"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.10,<4",
+    "psycopg[binary]>=3.3,<4",
+    "python-dotenv>=1,<2",
+    "zulip==0.9.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1,<2",
+    "ruff>=0.13,<1",
+]
+
+[project.scripts]
+ntfy4zulip = "ntfy4zulip.cli:main"
+ntfy4zulip-demo = "ntfy4zulip.demo:main"
+
+[tool.setuptools.packages.find]
+include = ["ntfy4zulip*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
