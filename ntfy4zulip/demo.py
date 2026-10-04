@@ -20,7 +20,16 @@ def build_parser() -> argparse.ArgumentParser:
         description="Send a synthetic notification through ntfy without Zulip/PostgreSQL.",
     )
     parser.add_argument("--user-id", type=int, default=42)
-    parser.add_argument("--ntfy-host", default=os.getenv("NTFY_HOST", "http://127.0.0.1:8081"))
+    parser.add_argument(
+        "--ntfy-publish-url",
+        "--ntfy-host",
+        dest="ntfy_publish_url",
+        default=(
+            os.getenv("NTFY_PUBLISH_URL")
+            or os.getenv("NTFY_HOST")
+            or "http://127.0.0.1:8081"
+        ),
+    )
     parser.add_argument("--ntfy-token", default=os.getenv("NTFY_AUTH_TOKEN") or None)
     parser.add_argument("--topic-prefix", default=os.getenv("NTFY_TOPIC_PREFIX", "zulip"))
     parser.add_argument("--topic-secret", default=os.getenv("TOPIC_SECRET"))
@@ -53,7 +62,7 @@ async def send_demo(args: argparse.Namespace) -> bool:
     async with aiohttp.ClientSession() as session:
         ntfy = NtfyClient(
             session=session,
-            host=args.ntfy_host,
+            host=args.ntfy_publish_url,
             auth_token=args.ntfy_token,
         )
         ok = await ntfy.send(topic=topic, title=title, message=message, click=click)
