@@ -30,6 +30,7 @@ class ConfigTests(unittest.TestCase):
             config = load_config(base)
         self.assertEqual(config.zulip_site, "https://zulip.example")
         self.assertEqual(config.ntfy_topic_prefix, "zulip")
+        self.assertEqual(config.zulip_db_schema, "public")
         self.assertEqual(config.poll_interval_seconds, 60)
         self.assertEqual(config.notification_delay_minutes, 3)
         self.assertEqual(config.db_timeout_seconds, 15)
@@ -52,6 +53,20 @@ class ConfigTests(unittest.TestCase):
         env = self.valid_env() | {"POLL_INTERVAL_SECONDS": "30"}
         with patch.dict(os.environ, env, clear=True):
             with self.assertRaisesRegex(ValueError, "must be 60"):
+                load_config(base)
+
+    def test_custom_database_schema(self):
+        base = self.make_base()
+        env = self.valid_env() | {"ZULIP_DB_SCHEMA": "zulip"}
+        with patch.dict(os.environ, env, clear=True):
+            config = load_config(base)
+        self.assertEqual(config.zulip_db_schema, "zulip")
+
+    def test_invalid_database_schema_is_rejected(self):
+        base = self.make_base()
+        env = self.valid_env() | {"ZULIP_DB_SCHEMA": "zulip;drop schema public"}
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(ValueError, "ZULIP_DB_SCHEMA"):
                 load_config(base)
 
     def test_invalid_ntfy_url_is_rejected(self):
