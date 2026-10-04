@@ -36,9 +36,11 @@ def main() -> None:
 
     if args.check_config:
         logging.getLogger(__name__).info(
-            "configuration OK: zulip=%s ntfy=%s topic_prefix=%s delay=%sm",
+            "configuration OK: zulip=%s ntfy_publish=%s ntfy_public=%s "
+            "topic_prefix=%s delay=%sm",
             config.zulip_site,
-            config.ntfy_host,
+            config.ntfy_publish_url,
+            config.ntfy_public_url or "not-configured",
             config.ntfy_topic_prefix,
             config.notification_delay_minutes,
         )
