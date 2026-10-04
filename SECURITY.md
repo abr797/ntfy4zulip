@@ -46,6 +46,6 @@ Run ntfy and Zulip over HTTPS in production.
 
 ## Reporting
 
-This repository is private during initial development. Report discovered security
-issues directly to the repository owner rather than publishing credentials or message
-contents in an issue.
+Report security vulnerabilities privately to the repository owner. Do not publish
+credentials, message contents, exploit details, or other sensitive information in a
+public issue.
