@@ -1,4 +1,7 @@
 -- Directly runnable reference query for Zulip Server 12.2.
+-- Set this search_path to the schema configured as ZULIP_DB_SCHEMA.
+SET LOCAL search_path TO zulip, pg_catalog;
+
 -- Edit the two values in params before running against a real installation.
 WITH params AS (
     SELECT
