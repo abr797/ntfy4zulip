@@ -1,0 +1,63 @@
+name: One-time scrub deployment-specific history
+
+on:
+  push:
+    paths:
+      - ".github/workflows/scrub-deployment-history.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  scrub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rewrite deployment-specific wording from history
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export FILTER_BRANCH_SQUELCH_WARNING=1
+          git filter-branch -f --tree-filter '
+            python -c '"'"'
+from pathlib import Path
+
+replacements = {
+    Path("README.md"): [
+        (
+            "Set \`ZULIP_DB_SCHEMA\` to the schema that actually contains the Zulip tables (for example, \`zulip\` in the production Docker deployment discovered during rollout; the default remains \`public\`).",
+            "Set \`ZULIP_DB_SCHEMA\` to the schema that actually contains the Zulip tables (for example, some Docker deployments use \`zulip\`; the default remains \`public\`).",
+        ),
+    ],
+    Path("docs/deployment-checklist.md"): [
+        (
+            "- [ ] Set \`ZULIP_DB_SCHEMA\` to the production schema (currently discovered as \`zulip\`) and confirm the PostgreSQL role passes startup validation without changing unrelated \`public\` ACLs.",
+            "- [ ] Set \`ZULIP_DB_SCHEMA\` to the schema containing the Zulip tables and confirm the PostgreSQL role passes startup validation without changing unrelated \`public\` ACLs.",
+        ),
+    ],
+}
+
+for path, pairs in replacements.items():
+    if not path.exists():
+        continue
+    text = path.read_text()
+    updated = text
+    for old, new in pairs:
+        updated = updated.replace(old, new)
+    if updated != text:
+        path.write_text(updated)
+'"'"'
+          ' -- main
+
+          NEW_EMAIL="326879900+abr797@users.noreply.github.com"
+          git config user.name "abr797"
+          git config user.email "$NEW_EMAIL"
+
+          git rm .github/workflows/scrub-deployment-history.yml
+          git commit -m "Remove one-time deployment history scrub workflow"
+
+          git push --force origin HEAD:main
