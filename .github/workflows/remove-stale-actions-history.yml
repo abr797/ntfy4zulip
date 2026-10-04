@@ -1,0 +1,50 @@
+name: One-time remove stale Actions history
+
+on:
+  push:
+    paths:
+      - ".github/workflows/remove-stale-actions-history.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete workflow runs that reference unreachable commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git rev-list HEAD > /tmp/reachable-shas
+
+          gh api --paginate "/repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | [.id, .head_sha] | @tsv' > /tmp/runs.tsv
+
+          while IFS=$'\t' read -r run_id head_sha; do
+            [ -n "$run_id" ] || continue
+            [ "$run_id" = "$GITHUB_RUN_ID" ] && continue
+
+            if ! grep -qx "$head_sha" /tmp/reachable-shas; then
+              echo "Deleting stale workflow run $run_id ($head_sha)"
+              gh api --method DELETE "/repos/$GITHUB_REPOSITORY/actions/runs/$run_id"
+            fi
+          done < /tmp/runs.tsv
+
+      - name: Remove this one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "abr797"
+          git config user.email "326879900+abr797@users.noreply.github.com"
+          git rm .github/workflows/remove-stale-actions-history.yml
+          git commit -m "Remove one-time Actions history cleanup workflow"
+          git push origin HEAD:main
