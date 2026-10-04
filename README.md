@@ -48,7 +48,9 @@ Any 1:1 DM to the configured Generic bot causes the bot to:
 
 1. derive the sender's personal topic;
 2. publish a test notification to it immediately;
-3. reply in Zulip with the ntfy server address and topic.
+3. reply in Zulip with the personal topic and, when configured, the public ntfy server address.
+
+Publishing does not require a public ntfy FQDN. `NTFY_PUBLISH_URL` is the endpoint used by the service itself and may be an internal Docker URL such as `http://ntfy:80`. `NTFY_PUBLIC_URL` is optional and is only shown to users. If it is not configured yet, the bot still sends the test notification to the internal ntfy server and returns the user's topic, but explains that an external client cannot be configured until a public address exists.
 
 Channel messages and group DMs to the bot are ignored. Repeating the DM returns the same topic and sends another test push, making the bot a simple self-service diagnostic endpoint. The bot can remain a normal Generic bot; organization-admin privileges are not required in DB-backed mode.
 
@@ -81,6 +83,20 @@ ntfy4zulip
 ```
 
 `python3 run_db.py` remains as a compatibility entry point.
+
+## ntfy endpoints
+
+Recommended same-host Docker deployment:
+
+```dotenv
+NTFY_PUBLISH_URL=http://ntfy:80
+# Set later when external clients can reach ntfy:
+# NTFY_PUBLIC_URL=https://ntfy.example.com
+```
+
+Attach the `ntfy4zulip` container to the existing ntfy Docker network and use that network's stable service/DNS alias. Do not publish an additional ntfy host port merely for this bridge.
+
+`NTFY_HOST` remains accepted for backward compatibility. When used and neither new variable is set, it acts as both the publish endpoint and the public URL. New deployments should use the split variables.
 
 ## ntfy ACL
 
@@ -132,7 +148,7 @@ Then, in another shell:
 
 ```bash
 TOPIC_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
-NTFY_HOST=http://127.0.0.1:8081 \
+NTFY_PUBLISH_URL=http://127.0.0.1:8081 \
 ntfy4zulip-demo --user-id 42
 ```
 
