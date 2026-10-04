@@ -25,9 +25,12 @@ def candidate(**overrides):
 
 
 class LinkTests(unittest.TestCase):
-    def test_hash_encoding_matches_zulip_style(self):
+    def test_hash_encoding_matches_documented_narrow_format(self):
         self.assertEqual(encode_hash_component("normal topic"), "normal.20topic")
         self.assertEqual(encode_hash_component("a.b"), "a.2Eb")
+        self.assertEqual(encode_hash_component("%()"), ".25.28.29")
+        self.assertEqual(encode_hash_component("ü"), ".C3.BC")
+        self.assertEqual(encode_hash_component("AZaz09-_~"), "AZaz09-_~")
 
     def test_channel_message_link(self):
         url = candidate_message_url("https://chat.example", candidate())
