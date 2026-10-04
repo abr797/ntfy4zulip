@@ -26,11 +26,11 @@ class FakeZulipClient:
 
 
 class BotTests(unittest.IsolatedAsyncioTestCase):
-    def make_bot(self, ntfy):
+    def make_bot(self, ntfy, public_url="https://ntfy.example"):
         return EnrollmentBot(
             zuliprc_path=Path("zuliprc"),
             ntfy=ntfy,
-            ntfy_host="https://ntfy.example",
+            ntfy_public_url=public_url,
             topic_secret="x" * 32,
             topic_prefix="zulip",
             loop=asyncio.get_running_loop(),
@@ -60,6 +60,7 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(topic.startswith("zulip_"))
         self.assertEqual(client.messages[0]["to"], ["bob@example.com"])
         self.assertIn(topic, client.messages[0]["content"])
+        self.assertIn("https://ntfy.example", client.messages[0]["content"])
         self.assertIn("Я уже отправил", client.messages[0]["content"])
 
     async def test_ntfy_failure_still_returns_topic_and_failure_status(self):
@@ -73,6 +74,21 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(client.messages), 1)
         self.assertIn("zulip_", client.messages[0]["content"])
         self.assertIn("отправить не удалось", client.messages[0]["content"])
+
+    async def test_dm_without_public_url_still_sends_local_test_push(self):
+        ntfy = FakeNtfy()
+        bot = self.make_bot(ntfy, public_url=None)
+        client = FakeZulipClient()
+        bot.sender_client = client
+
+        await bot._handle_dm(user_id=42, sender_email="bob@example.com")
+
+        self.assertEqual(len(ntfy.calls), 1)
+        topic = ntfy.calls[0]["topic"]
+        content = client.messages[0]["content"]
+        self.assertIn(topic, content)
+        self.assertIn("Публичный адрес ntfy пока не настроен", content)
+        self.assertNotIn("http://ntfy", content)
 
     async def test_zulip_send_error_is_logged_but_does_not_raise(self):
         bot = self.make_bot(FakeNtfy())

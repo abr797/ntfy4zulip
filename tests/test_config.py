@@ -30,6 +30,8 @@ class ConfigTests(unittest.TestCase):
             config = load_config(base)
         self.assertEqual(config.zulip_site, "https://zulip.example")
         self.assertEqual(config.ntfy_topic_prefix, "zulip")
+        self.assertEqual(config.ntfy_publish_url, "https://ntfy.sh")
+        self.assertIsNone(config.ntfy_public_url)
         self.assertEqual(config.zulip_db_schema, "public")
         self.assertEqual(config.poll_interval_seconds, 60)
         self.assertEqual(config.notification_delay_minutes, 3)
@@ -69,11 +71,60 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "ZULIP_DB_SCHEMA"):
                 load_config(base)
 
-    def test_invalid_ntfy_url_is_rejected(self):
+    def test_separate_internal_publish_and_public_urls(self):
         base = self.make_base()
-        env = self.valid_env() | {"NTFY_HOST": "not-a-url"}
+        env = self.valid_env() | {
+            "NTFY_PUBLISH_URL": "http://ntfy:80",
+            "NTFY_PUBLIC_URL": "https://push.example.com",
+        }
         with patch.dict(os.environ, env, clear=True):
-            with self.assertRaisesRegex(ValueError, "NTFY_HOST"):
+            config = load_config(base)
+        self.assertEqual(config.ntfy_publish_url, "http://ntfy:80")
+        self.assertEqual(config.ntfy_public_url, "https://push.example.com")
+
+    def test_public_url_is_optional(self):
+        base = self.make_base()
+        env = self.valid_env() | {"NTFY_PUBLISH_URL": "http://ntfy:80"}
+        with patch.dict(os.environ, env, clear=True):
+            config = load_config(base)
+        self.assertEqual(config.ntfy_publish_url, "http://ntfy:80")
+        self.assertIsNone(config.ntfy_public_url)
+
+    def test_legacy_ntfy_host_populates_both_urls(self):
+        base = self.make_base()
+        env = self.valid_env() | {"NTFY_HOST": "https://legacy.example.com"}
+        with patch.dict(os.environ, env, clear=True):
+            config = load_config(base)
+        self.assertEqual(config.ntfy_publish_url, "https://legacy.example.com")
+        self.assertEqual(config.ntfy_public_url, "https://legacy.example.com")
+
+    def test_new_ntfy_settings_override_legacy_host(self):
+        base = self.make_base()
+        env = self.valid_env() | {
+            "NTFY_HOST": "https://legacy.example.com",
+            "NTFY_PUBLISH_URL": "http://ntfy:80",
+            "NTFY_PUBLIC_URL": "https://push.example.com",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            config = load_config(base)
+        self.assertEqual(config.ntfy_publish_url, "http://ntfy:80")
+        self.assertEqual(config.ntfy_public_url, "https://push.example.com")
+
+    def test_invalid_ntfy_publish_url_is_rejected(self):
+        base = self.make_base()
+        env = self.valid_env() | {"NTFY_PUBLISH_URL": "not-a-url"}
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(ValueError, "NTFY_PUBLISH_URL"):
+                load_config(base)
+
+    def test_invalid_ntfy_public_url_is_rejected(self):
+        base = self.make_base()
+        env = self.valid_env() | {
+            "NTFY_PUBLISH_URL": "http://ntfy:80",
+            "NTFY_PUBLIC_URL": "not-a-url",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(ValueError, "NTFY_PUBLIC_URL"):
                 load_config(base)
 
     def test_invalid_zulip_site_is_rejected(self):

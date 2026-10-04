@@ -23,8 +23,13 @@ ntfy4zulip has two independent inputs and one shared ntfy transport.
                                     v
                             async ntfy client
                                     |
+                    NTFY_PUBLISH_URL (internal)
+                                    |
                                     v
                          self-hosted ntfy server
+
+Enrollment replies optionally expose NTFY_PUBLIC_URL to end-user clients.
+The internal publish URL is never passed to the onboarding bot.
 ```
 
 ## Notification path
@@ -54,7 +59,11 @@ Any 1:1 DM to the Generic bot is treated as an enrollment/diagnostic request:
 1. use the event's stable `sender_id`;
 2. derive the same HMAC topic used by the poller;
 3. send a test push immediately;
-4. reply with server + topic + instructions.
+4. reply with topic + instructions and, if configured, the public client URL.
+
+The service can publish entirely over a local Docker network without a public ntfy
+FQDN. `NTFY_PUBLIC_URL` is optional and independent from the internal
+`NTFY_PUBLISH_URL`.
 
 The bot does not need organization-admin permissions because it does not monitor
 organization traffic. The separate PostgreSQL account handles read-only notification

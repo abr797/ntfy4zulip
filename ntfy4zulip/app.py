@@ -48,7 +48,7 @@ async def run(config: Config) -> None:
     async with aiohttp.ClientSession() as session:
         ntfy = NtfyClient(
             session=session,
-            host=config.ntfy_host,
+            host=config.ntfy_publish_url,
             auth_token=config.ntfy_auth_token,
             concurrency=config.ntfy_concurrency,
             timeout_seconds=config.ntfy_timeout_seconds,
@@ -75,7 +75,7 @@ async def run(config: Config) -> None:
         bot = EnrollmentBot(
             zuliprc_path=config.zuliprc_path,
             ntfy=ntfy,
-            ntfy_host=config.ntfy_host,
+            ntfy_public_url=config.ntfy_public_url,
             topic_secret=config.topic_secret,
             topic_prefix=config.ntfy_topic_prefix,
             loop=loop,

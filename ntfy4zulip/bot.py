@@ -18,14 +18,16 @@ class EnrollmentBot:
         *,
         zuliprc_path: Path,
         ntfy: NtfyClient,
-        ntfy_host: str,
+        ntfy_public_url: str | None,
         topic_secret: str,
         topic_prefix: str,
         loop: asyncio.AbstractEventLoop,
     ) -> None:
         self.zuliprc_path = zuliprc_path
         self.ntfy = ntfy
-        self.ntfy_host = ntfy_host.rstrip("/")
+        self.ntfy_public_url = (
+            ntfy_public_url.rstrip("/") if ntfy_public_url else None
+        )
         self.topic_secret = topic_secret
         self.topic_prefix = topic_prefix
         self.loop = loop
@@ -84,11 +86,25 @@ class EnrollmentBot:
         else:
             status = "Тестовое уведомление отправить не удалось. Напишите мне ещё раз позже."
 
+        if self.ntfy_public_url:
+            connection = (
+                f"**Сервер ntfy:** `{self.ntfy_public_url}`\n\n"
+                f"**Ваш персональный topic:** `{topic}`\n\n"
+                "Добавьте этот topic в приложение ntfy."
+            )
+            intro = "Привет! Push-уведомления для вашего аккаунта Zulip готовы."
+        else:
+            connection = (
+                f"**Ваш персональный topic:** `{topic}`\n\n"
+                "Публичный адрес ntfy пока не настроен. "
+                "Тестовое уведомление отправляется во внутренний ntfy, "
+                "но внешний клиент можно подключить после настройки публичного адреса."
+            )
+            intro = "Привет! Персональный topic для вашего аккаунта Zulip создан."
+
         content = (
-            "Привет! Push-уведомления для вашего аккаунта Zulip готовы.\n\n"
-            f"**Сервер ntfy:** `{self.ntfy_host}`\n\n"
-            f"**Ваш персональный topic:** `{topic}`\n\n"
-            "Добавьте этот topic в приложение ntfy.\n\n"
+            f"{intro}\n\n"
+            f"{connection}\n\n"
             f"{status}\n\n"
             "После подключения вы будете получать уведомления о сообщениях Zulip, "
             "которые остаются непрочитанными примерно через 3 минуты."
