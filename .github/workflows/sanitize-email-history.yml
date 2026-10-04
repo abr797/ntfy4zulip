@@ -1,0 +1,44 @@
+name: One-time sanitize commit emails
+
+on:
+  push:
+    paths:
+      - ".github/workflows/sanitize-email-history.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rewrite commit email metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NEW_EMAIL="326879900+abr797@users.noreply.github.com"
+          export NEW_EMAIL
+
+          git filter-branch -f --env-filter '
+            case "$GIT_AUTHOR_EMAIL" in
+              *@users.noreply.github.com|noreply@github.com) ;;
+              *) export GIT_AUTHOR_EMAIL="$NEW_EMAIL" ;;
+            esac
+            case "$GIT_COMMITTER_EMAIL" in
+              *@users.noreply.github.com|noreply@github.com) ;;
+              *) export GIT_COMMITTER_EMAIL="$NEW_EMAIL" ;;
+            esac
+          ' -- main
+
+          git config user.name "abr797"
+          git config user.email "$NEW_EMAIL"
+
+          git rm .github/workflows/sanitize-email-history.yml
+          git commit -m "Remove one-time email sanitization workflow"
+
+          git push --force origin HEAD:main
