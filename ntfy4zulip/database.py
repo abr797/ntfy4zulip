@@ -95,13 +95,22 @@ class ZulipDatabase:
         realm_anchor_user_id: int,
         delay_minutes: int = 3,
         timeout_seconds: int = 15,
+        schema: str = "public",
     ):
         self.dsn = dsn
         self.realm_anchor_user_id = realm_anchor_user_id
         self.delay_minutes = delay_minutes
         self.timeout_seconds = timeout_seconds
+        self.schema = schema
 
-    def _configure_statement_timeout(self, conn: object) -> None:
+    def _configure_session(self, conn: object) -> None:
+        from psycopg import sql
+
+        conn.execute(  # type: ignore[attr-defined]
+            sql.SQL("SET LOCAL search_path TO {}, pg_catalog").format(
+                sql.Identifier(self.schema)
+            )
+        )
         conn.execute(  # type: ignore[attr-defined]
             "SELECT set_config('statement_timeout', %s, true)",
             (f"{self.timeout_seconds}s",),
@@ -114,19 +123,56 @@ class ZulipDatabase:
         with psycopg.connect(self.dsn, connect_timeout=self.timeout_seconds) as conn:
             with conn.transaction():
                 conn.execute("SET TRANSACTION READ ONLY")
-                self._configure_statement_timeout(conn)
+                self._configure_session(conn)
                 current_user = str(conn.execute("SELECT current_user").fetchone()[0])
 
+                schema_exists = bool(
+                    conn.execute(
+                        "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = %s)",
+                        (self.schema,),
+                    ).fetchone()[0]
+                )
+                if not schema_exists:
+                    raise RuntimeError(
+                        f"Configured PostgreSQL schema {self.schema!r} does not exist"
+                    )
+
+                schema_usage = bool(
+                    conn.execute(
+                        "SELECT has_schema_privilege(current_user, %s, 'USAGE')",
+                        (self.schema,),
+                    ).fetchone()[0]
+                )
+                if not schema_usage:
+                    raise RuntimeError(
+                        f"PostgreSQL role {current_user!r} lacks USAGE on schema "
+                        f"{self.schema!r}"
+                    )
+
+                schema_create = bool(
+                    conn.execute(
+                        "SELECT has_schema_privilege(current_user, %s, 'CREATE')",
+                        (self.schema,),
+                    ).fetchone()[0]
+                )
+                if schema_create:
+                    raise RuntimeError(
+                        f"PostgreSQL role {current_user!r} has forbidden CREATE "
+                        f"privilege on schema {self.schema!r}"
+                    )
+
                 for table in self.REQUIRED_TABLES:
+                    qualified_table = f"{self.schema}.{table}"
                     select_ok = bool(
                         conn.execute(
                             "SELECT has_table_privilege(current_user, %s, 'SELECT')",
-                            (table,),
+                            (qualified_table,),
                         ).fetchone()[0]
                     )
                     if not select_ok:
                         raise RuntimeError(
-                            f"PostgreSQL role {current_user!r} lacks SELECT on {table}"
+                            f"PostgreSQL role {current_user!r} lacks SELECT on "
+                            f"{qualified_table}"
                         )
 
                     for privilege in (
@@ -140,25 +186,14 @@ class ZulipDatabase:
                         has_write = bool(
                             conn.execute(
                                 "SELECT has_table_privilege(current_user, %s, %s)",
-                                (table, privilege),
+                                (qualified_table, privilege),
                             ).fetchone()[0]
                         )
                         if has_write:
                             raise RuntimeError(
                                 f"PostgreSQL role {current_user!r} has forbidden "
-                                f"{privilege} privilege on {table}"
+                                f"{privilege} privilege on {qualified_table}"
                             )
-
-                schema_create = bool(
-                    conn.execute(
-                        "SELECT has_schema_privilege(current_user, 'public', 'CREATE')"
-                    ).fetchone()[0]
-                )
-                if schema_create:
-                    raise RuntimeError(
-                        f"PostgreSQL role {current_user!r} has forbidden CREATE "
-                        "privilege on public schema"
-                    )
 
                 realm_exists = conn.execute(
                     "SELECT EXISTS(SELECT 1 FROM zerver_userprofile WHERE id = %s)",
@@ -182,7 +217,7 @@ class ZulipDatabase:
         ) as conn:
             with conn.transaction():
                 conn.execute("SET TRANSACTION READ ONLY")
-                self._configure_statement_timeout(conn)
+                self._configure_session(conn)
                 with conn.cursor() as cur:
                     cur.execute(
                         UNREAD_NOTIFICATION_QUERY,

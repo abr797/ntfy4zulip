@@ -1,4 +1,5 @@
 -- Directly runnable reference query for Zulip Server 12.2.
+-- This example uses schema "zulip"; replace that qualifier if ZULIP_DB_SCHEMA differs.
 -- Edit the two values in params before running against a real installation.
 WITH params AS (
     SELECT
@@ -21,17 +22,17 @@ SELECT
         WHEN m.is_channel_message THEN NULL
         ELSE ARRAY(
             SELECT dm_sub.user_profile_id
-            FROM zerver_subscription AS dm_sub
+            FROM zulip.zerver_subscription AS dm_sub
             WHERE dm_sub.recipient_id = m.recipient_id
             ORDER BY dm_sub.user_profile_id
         )
     END AS dm_user_ids
-FROM zerver_message AS m
-JOIN zerver_usermessage AS um ON um.message_id = m.id
-JOIN zerver_userprofile AS sender ON sender.id = m.sender_id
-JOIN zerver_userprofile AS target ON target.id = um.user_profile_id
-JOIN zerver_recipient AS recipient ON recipient.id = m.recipient_id
-LEFT JOIN zerver_stream AS stream
+FROM zulip.zerver_message AS m
+JOIN zulip.zerver_usermessage AS um ON um.message_id = m.id
+JOIN zulip.zerver_userprofile AS sender ON sender.id = m.sender_id
+JOIN zulip.zerver_userprofile AS target ON target.id = um.user_profile_id
+JOIN zulip.zerver_recipient AS recipient ON recipient.id = m.recipient_id
+LEFT JOIN zulip.zerver_stream AS stream
     ON m.is_channel_message
    AND recipient.type = 2
    AND stream.id = recipient.type_id
@@ -47,7 +48,7 @@ WHERE
     AND target.is_bot = FALSE
     AND m.realm_id = (
         SELECT realm_id
-        FROM zerver_userprofile
+        FROM zulip.zerver_userprofile
         WHERE id = p.bot_user_id
     )
 ORDER BY m.id, um.user_profile_id;

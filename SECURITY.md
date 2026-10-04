@@ -19,7 +19,7 @@ Use a dedicated PostgreSQL role with SELECT-only access to the tables listed in
 `sql/readonly_role.example.sql`. ntfy4zulip never needs to write to the Zulip
 database.
 
-Do not reuse Zulip's database owner/superuser credentials. At startup the application verifies effective SELECT access to every required table and rejects roles with INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, or public-schema CREATE privileges.
+Do not reuse Zulip's database owner/superuser credentials. Configure `ZULIP_DB_SCHEMA` to the schema that actually owns the Zulip application tables. At startup the application verifies USAGE on that schema and effective SELECT access to every required table, and rejects roles with INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, or CREATE privileges on the configured Zulip schema. Privileges on unrelated schemas such as an empty `public` schema are not modified or used as a deployment workaround.
 
 ## ntfy topics
 

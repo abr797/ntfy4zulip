@@ -15,7 +15,9 @@ to a production Zulip server.
 - [x] One malformed candidate does not prevent delivery of other candidates.
 - [x] Poller exits cleanly when its stop event is set.
 - [x] The actual production SQL executes against PostgreSQL 16 in CI.
-- [x] CI creates a separate SELECT-only PostgreSQL login, runs the production poller under it, and proves INSERT is denied.
+- [x] CI creates a separate SELECT-only PostgreSQL login, runs the production poller against a non-public `zulip` schema, and proves INSERT is denied.
+- [x] The application sets a transaction-local search path to `ZULIP_DB_SCHEMA` and validates USAGE/CREATE on that actual schema.
+- [x] An unrelated writable `public` schema does not force a global ACL change.
 - [x] Startup privilege validation accepts the SELECT-only role and rejects a write-capable role or unknown bot user.
 - [x] PostgreSQL connect/statement duration is bounded by configuration.
 - [x] Synthetic SQL fixtures cover read/unread, sender exclusion, age window,
@@ -32,7 +34,8 @@ environment:
 
 - [ ] Run `sql/unread_notifications.sql` read-only against the real Zulip Server
       12.2 database and compare a few rows with the Zulip UI.
-- [ ] Confirm the production PostgreSQL role passes ntfy4zulip startup validation and cannot write to Zulip tables/schema.
+- [ ] Set `ZULIP_DB_SCHEMA` to the schema containing the Zulip tables and confirm the PostgreSQL role passes startup validation without changing unrelated `public` ACLs.
+- [ ] Confirm the production PostgreSQL role cannot write to Zulip tables or CREATE in the configured Zulip schema.
 - [ ] Send a 1:1 DM to the real enrollment bot and receive its instruction reply.
 - [ ] Subscribe a real ntfy phone/client to the returned topic and receive the test push.
 - [ ] Verify a channel message read within 3 minutes produces no push.

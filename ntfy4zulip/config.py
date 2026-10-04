@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import configparser
 import os
+import re
 import sys
 import urllib.parse
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ class Config:
     zulip_site: str
     zuliprc_path: Path
     zulip_db_dsn: str
+    zulip_db_schema: str
     ntfy_host: str
     ntfy_auth_token: str | None
     ntfy_topic_prefix: str
@@ -50,6 +52,16 @@ def _positive_int(name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer") from exc
     if value <= 0:
         raise ValueError(f"{name} must be > 0")
+    return value
+
+
+def _db_schema(value: str) -> str:
+    value = value.strip()
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+        raise ValueError(
+            "ZULIP_DB_SCHEMA must be a simple PostgreSQL identifier "
+            "(letters, digits and underscore)"
+        )
     return value
 
 
@@ -98,6 +110,7 @@ def load_config(base_dir: Path | None = None) -> Config:
         zulip_site=zulip_site,
         zuliprc_path=zuliprc_path,
         zulip_db_dsn=_require_env("ZULIP_DB_DSN"),
+        zulip_db_schema=_db_schema(os.getenv("ZULIP_DB_SCHEMA", "public")),
         ntfy_host=_http_url("NTFY_HOST", os.getenv("NTFY_HOST", "https://ntfy.sh")),
         ntfy_auth_token=os.getenv("NTFY_AUTH_TOKEN", "").strip() or None,
         ntfy_topic_prefix=os.getenv("NTFY_TOPIC_PREFIX", "zulip").strip().strip("_-") or "zulip",

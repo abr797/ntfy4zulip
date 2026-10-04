@@ -6,6 +6,7 @@ from ntfy4zulip.database import ZulipDatabase
 
 DSN = os.getenv("TEST_POSTGRES_DSN")
 READONLY_DSN = os.getenv("TEST_READONLY_POSTGRES_DSN")
+SCHEMA = "zulip"
 
 
 @unittest.skipUnless(DSN, "TEST_POSTGRES_DSN is not set")
@@ -17,15 +18,10 @@ class DatabaseIntegrationTests(unittest.TestCase):
         cls.conn = psycopg.connect(DSN, autocommit=True)
         cur = cls.conn.cursor()
 
-        for table in (
-            "zerver_subscription",
-            "zerver_usermessage",
-            "zerver_message",
-            "zerver_stream",
-            "zerver_recipient",
-            "zerver_userprofile",
-        ):
-            cur.execute(f"DROP TABLE IF EXISTS {table}")
+        cur.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
+        cur.execute(f"CREATE SCHEMA {SCHEMA}")
+        cur.execute("GRANT CREATE, USAGE ON SCHEMA public TO PUBLIC")
+        cur.execute(f"SET search_path TO {SCHEMA}, public")
 
         cur.execute(
             """
@@ -179,16 +175,16 @@ class DatabaseIntegrationTests(unittest.TestCase):
                 "CREATE ROLE ntfy4zulip_reader_test LOGIN PASSWORD 'reader-test-password'"
             )
             cur.execute("GRANT CONNECT ON DATABASE ntfy4zulip_test TO ntfy4zulip_reader_test")
-            cur.execute("GRANT USAGE ON SCHEMA public TO ntfy4zulip_reader_test")
+            cur.execute(f"GRANT USAGE ON SCHEMA {SCHEMA} TO ntfy4zulip_reader_test")
             cur.execute(
-                """
+                f"""
                 GRANT SELECT ON TABLE
-                    zerver_message,
-                    zerver_usermessage,
-                    zerver_userprofile,
-                    zerver_recipient,
-                    zerver_stream,
-                    zerver_subscription
+                    {SCHEMA}.zerver_message,
+                    {SCHEMA}.zerver_usermessage,
+                    {SCHEMA}.zerver_userprofile,
+                    {SCHEMA}.zerver_recipient,
+                    {SCHEMA}.zerver_stream,
+                    {SCHEMA}.zerver_subscription
                 TO ntfy4zulip_reader_test
                 """
             )
@@ -197,20 +193,20 @@ class DatabaseIntegrationTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cur = cls.conn.cursor()
-        for table in (
-            "zerver_subscription",
-            "zerver_usermessage",
-            "zerver_message",
-            "zerver_stream",
-            "zerver_recipient",
-            "zerver_userprofile",
-        ):
-            cur.execute(f"DROP TABLE IF EXISTS {table}")
         if READONLY_DSN:
             cur.execute("DROP OWNED BY ntfy4zulip_reader_test")
             cur.execute("DROP ROLE IF EXISTS ntfy4zulip_reader_test")
+        cur.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
         cur.close()
         cls.conn.close()
+
+    def make_db(self, dsn, user_id=900):
+        return ZulipDatabase(
+            dsn,
+            realm_anchor_user_id=user_id,
+            delay_minutes=3,
+            schema=SCHEMA,
+        )
 
     def assert_candidate_set(self, candidates):
         pairs = {(item.message_id, item.target_user_id) for item in candidates}
@@ -236,10 +232,9 @@ class DatabaseIntegrationTests(unittest.TestCase):
         self.assertEqual(group_dm.dm_user_ids, (1, 2, 3))
 
     def test_real_postgresql_query_filters_and_maps_candidates(self):
-        db = ZulipDatabase(DSN, realm_anchor_user_id=900, delay_minutes=3)
-        self.assert_candidate_set(db.fetch_candidates())
+        self.assert_candidate_set(self.make_db(DSN).fetch_candidates())
 
-    def test_reference_sql_file_executes_without_placeholders(self):
+    def test_reference_sql_file_executes_against_zulip_schema(self):
         import psycopg
         from psycopg.rows import dict_row
 
@@ -259,27 +254,44 @@ class DatabaseIntegrationTests(unittest.TestCase):
         import psycopg
         from psycopg.errors import InsufficientPrivilege
 
-        db = ZulipDatabase(READONLY_DSN, realm_anchor_user_id=900, delay_minutes=3)
+        db = self.make_db(READONLY_DSN)
         self.assertEqual(db.validate_access(), "ntfy4zulip_reader_test")
         self.assert_candidate_set(db.fetch_candidates())
+
+        with psycopg.connect(READONLY_DSN) as conn:
+            public_create = bool(
+                conn.execute(
+                    "SELECT has_schema_privilege(current_user, 'public', 'CREATE')"
+                ).fetchone()[0]
+            )
+            self.assertTrue(public_create)
 
         with psycopg.connect(READONLY_DSN, autocommit=True) as conn:
             with self.assertRaises(InsufficientPrivilege):
                 conn.execute(
-                    """
-                    INSERT INTO zerver_userprofile
+                    f"""
+                    INSERT INTO {SCHEMA}.zerver_userprofile
                         (id, realm_id, full_name, is_active, is_bot)
                     VALUES (9999, 1, 'should fail', TRUE, FALSE)
                     """
                 )
 
     def test_startup_validation_rejects_write_capable_role(self):
-        db = ZulipDatabase(DSN, realm_anchor_user_id=900, delay_minutes=3)
-        with self.assertRaisesRegex(RuntimeError, "forbidden .* privilege"):
-            db.validate_access()
+        with self.assertRaisesRegex(RuntimeError, "forbidden CREATE privilege"):
+            self.make_db(DSN).validate_access()
 
     @unittest.skipUnless(READONLY_DSN, "TEST_READONLY_POSTGRES_DSN is not set")
     def test_startup_validation_rejects_unknown_bot_user(self):
-        db = ZulipDatabase(READONLY_DSN, realm_anchor_user_id=999999, delay_minutes=3)
         with self.assertRaisesRegex(RuntimeError, "bot user_id"):
+            self.make_db(READONLY_DSN, user_id=999999).validate_access()
+
+    @unittest.skipUnless(READONLY_DSN, "TEST_READONLY_POSTGRES_DSN is not set")
+    def test_startup_validation_rejects_missing_schema(self):
+        db = ZulipDatabase(
+            READONLY_DSN,
+            realm_anchor_user_id=900,
+            delay_minutes=3,
+            schema="missing_schema",
+        )
+        with self.assertRaisesRegex(RuntimeError, "does not exist"):
             db.validate_access()
