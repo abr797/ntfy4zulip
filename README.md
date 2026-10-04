@@ -66,7 +66,7 @@ cp .env.example .env
 cp zuliprc.example zuliprc
 ```
 
-`ntfy4zulip` loads `.env` and the default `zuliprc` from the current working directory (systemd uses `/opt/ntfy4zulip`), or you can set `ZULIPRC_PATH` explicitly. Keep the bot's normal `zuliprc` there. At startup the service calls `GET /users/me` once to obtain the bot `user_id`; the DB query uses that ID only to determine the bot's realm.
+`ntfy4zulip` loads `.env` and the default `zuliprc` from the current working directory (the example systemd unit uses `/srv/ntfy4zulip` and `/etc/ntfy4zulip.env`), or you can set `ZULIPRC_PATH` explicitly. Keep the bot's normal `zuliprc` there. At startup the service calls `GET /users/me` once to obtain the bot `user_id`; the DB query uses that ID only to determine the bot's realm.
 
 Create a dedicated PostgreSQL account with **SELECT-only** privileges. See `sql/readonly_role.example.sql`. Set `ZULIP_DB_SCHEMA` to the schema that actually contains the Zulip tables (for example, some Docker deployments use `zulip`; the default remains `public`). The application sets its transaction-local `search_path` itself, so no role-level search-path workaround is required. Startup fails fast if required SELECT/USAGE privileges are missing or if the role has table-write/CREATE privileges on the configured Zulip schema. `DB_TIMEOUT_SECONDS` (15 seconds by default) bounds both connection establishment and SQL statement execution so a stalled database cannot indefinitely block subsequent minute buckets.
 
@@ -129,12 +129,12 @@ These choices intentionally favor a simple timely-notification service over dela
 
 ## Deep links
 
-The link encoder follows Zulip Server 12.2 URL rules:
+The link encoder follows the documented Zulip narrow-URL format:
 
 - channel: `#narrow/channel/<id-name>/topic/<topic>/near/<message_id>`
 - DM: `#narrow/dm/<sorted-user-ids>[-group]/near/<message_id>`
 
-Reference: https://github.com/zulip/zulip/blob/12.2/zerver/lib/url_encoding.py
+Reference: https://zulip.com/api/zulip-urls
 
 ## Demo without Zulip
 
