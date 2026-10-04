@@ -1,0 +1,85 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e .
+      - run: python -m unittest discover -s tests -v
+      - run: python -m compileall -q ntfy4zulip run_db.py
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ntfy4zulip_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ntfy4zulip_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/ntfy4zulip_test
+      TEST_READONLY_POSTGRES_DSN: postgresql://ntfy4zulip_reader_test:reader-test-password@127.0.0.1:5432/ntfy4zulip_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e .
+      - run: python -m unittest discover -s tests -p "test_database_integration.py" -v
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check ntfy4zulip tests run_db.py
+      - run: python -m build
+      - name: Verify installed CLI config check
+        run: |
+          mkdir -p /tmp/ntfy4zulip-config
+          cat > /tmp/ntfy4zulip-config/zuliprc <<'EOF'
+          [api]
+          site=https://zulip.example
+          email=bot@example.com
+          key=test
+          EOF
+          TOPIC_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
+          ZULIP_DB_DSN=postgresql://reader@example/zulip \
+          ZULIPRC_PATH=/tmp/ntfy4zulip-config/zuliprc \
+          ntfy4zulip --check-config

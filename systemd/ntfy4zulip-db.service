@@ -1,0 +1,34 @@
+[Unit]
+Description=ntfy4zulip unread-message notification service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=ntfy4zulip
+Group=ntfy4zulip
+WorkingDirectory=/srv/ntfy4zulip
+EnvironmentFile=/etc/ntfy4zulip.env
+ExecStart=/srv/ntfy4zulip/.venv/bin/ntfy4zulip
+
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

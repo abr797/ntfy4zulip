@@ -1,0 +1,16 @@
+.venv
+.env
+
+zuliprc
+zuliprc.local
+zuliprc.*.local
+
+__pycache__/
+*.py[cod]
+.coverage
+
+dist/
+build/
+*.egg-info/
+.idea/
+notes.md*
