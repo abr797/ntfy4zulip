@@ -58,6 +58,7 @@ async def run(config: Config) -> None:
             realm_anchor_user_id=bot_user_id,
             delay_minutes=config.notification_delay_minutes,
             timeout_seconds=config.db_timeout_seconds,
+            schema=config.zulip_db_schema,
         )
         db_user = await asyncio.to_thread(database.validate_access)
         logger.info("PostgreSQL access validated as read-only role=%s", db_user)
