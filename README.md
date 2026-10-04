@@ -172,6 +172,10 @@ The GitHub Actions workflow additionally:
 
 The remaining real-environment validation is tracked in [docs/deployment-checklist.md](docs/deployment-checklist.md).
 
+## Authorship
+
+The implementation code in this repository was written by OpenAI ChatGPT under the direction of the human project owner. The human project owner was responsible for the product work: problem framing, requirements, priorities, deployment constraints, validation criteria, and final acceptance.
+
 ## Security and references
 
 - [SECURITY.md](SECURITY.md)
