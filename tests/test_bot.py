@@ -99,10 +99,14 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ntfy.calls[0]["source"], "enrollment")
         self.assertEqual(ntfy.calls[0]["message_id"], 1001)
         self.assertEqual(ntfy.calls[0]["user_id"], 42)
+        self.assertEqual(len(client.messages), 3)
         self.assertEqual(client.messages[0]["to"], ["bob@example.com"])
-        self.assertIn(topic, client.messages[0]["content"])
-        self.assertIn("https://ntfy.example", client.messages[0]["content"])
-        self.assertIn("Я уже отправил", client.messages[0]["content"])
+        self.assertIn("Использовать другой сервер", client.messages[0]["content"])
+        self.assertIn("секретный токен", client.messages[0]["content"])
+        self.assertNotIn("https://ntfy.example", client.messages[0]["content"])
+        self.assertNotIn(topic, client.messages[0]["content"])
+        self.assertEqual(client.messages[1]["content"], "https://ntfy.example")
+        self.assertEqual(client.messages[2]["content"], topic)
 
     async def test_ntfy_failure_still_returns_topic_and_failure_status(self):
         ntfy = FakeNtfy(result=False)
@@ -116,9 +120,10 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
             sender_email="bob@example.com",
         )
 
-        self.assertEqual(len(client.messages), 1)
-        self.assertIn("zulip_", client.messages[0]["content"])
+        self.assertEqual(len(client.messages), 3)
         self.assertIn("отправить не удалось", client.messages[0]["content"])
+        self.assertEqual(client.messages[1]["content"], "https://ntfy.example")
+        self.assertTrue(client.messages[2]["content"].startswith("zulip_"))
 
     async def test_dm_without_public_url_still_sends_local_test_push(self):
         ntfy = FakeNtfy()
@@ -133,10 +138,11 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(len(ntfy.calls), 1)
-        topic = ntfy.calls[0]["topic"]
+        self.assertEqual(len(client.messages), 1)
         content = client.messages[0]["content"]
-        self.assertIn(topic, content)
-        self.assertIn("Публичный адрес ntfy пока не настроен", content)
+        self.assertIn("публичный адрес ntfy", content.lower())
+        self.assertIn("Подключить мобильный клиент сейчас нельзя", content)
+        self.assertNotIn(ntfy.calls[0]["topic"], content)
         self.assertNotIn("http://ntfy", content)
 
     async def test_zulip_send_error_is_logged_but_does_not_raise(self):
