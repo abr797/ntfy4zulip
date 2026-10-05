@@ -142,50 +142,54 @@ class EnrollmentBot:
         )
 
         if test_ok:
-            status = "Я уже отправил в него тестовое уведомление."
+            status = "Тестовое уведомление уже отправлено."
         else:
             status = "Тестовое уведомление отправить не удалось. Напишите мне ещё раз позже."
 
         if self.ntfy_public_url:
-            connection = (
-                f"**Сервер ntfy:** `{self.ntfy_public_url}`\n\n"
-                f"**Ваш персональный topic:** `{topic}`\n\n"
-                "Добавьте этот topic в приложение ntfy."
+            instruction = (
+                "Привет! Push-уведомления для вашего аккаунта Zulip готовы.\n\n"
+                "Чтобы подключить их в приложении ntfy:\n"
+                "1. Добавьте новую подписку.\n"
+                "2. Включите «Использовать другой сервер».\n"
+                "3. В поле сервера вставьте адрес из следующего сообщения.\n"
+                "4. В поле «Тема» (Topic) вставьте секретный токен из третьего сообщения.\n"
+                "5. Сохраните подписку.\n\n"
+                "Секретный токен никому не пересылайте: он даёт доступ к вашей подписке.\n\n"
+                f"{status}\n\n"
+                "После подключения вы будете получать уведомления о сообщениях Zulip, "
+                "которые остаются непрочитанными примерно через 3 минуты."
             )
-            intro = "Привет! Push-уведомления для вашего аккаунта Zulip готовы."
+            reply_parts = (instruction, self.ntfy_public_url, topic)
         else:
-            connection = (
-                f"**Ваш персональный topic:** `{topic}`\n\n"
-                "Публичный адрес ntfy пока не настроен. "
-                "Тестовое уведомление отправляется во внутренний ntfy, "
-                "но внешний клиент можно подключить после настройки публичного адреса."
+            reply_parts = (
+                "Привет! Персональная подписка создана, но публичный адрес ntfy "
+                "пока не настроен. Подключить мобильный клиент сейчас нельзя. "
+                f"{status}",
             )
-            intro = "Привет! Персональный topic для вашего аккаунта Zulip создан."
 
-        content = (
-            f"{intro}\n\n"
-            f"{connection}\n\n"
-            f"{status}\n\n"
-            "После подключения вы будете получать уведомления о сообщениях Zulip, "
-            "которые остаются непрочитанными примерно через 3 минуты."
-        )
-        result = await asyncio.to_thread(
-            self.sender_client.send_message,
-            {"type": "private", "to": [sender_email], "content": content},
-        )
-        if isinstance(result, dict) and result.get("result") != "success":
-            logger.error(
-                "enrollment reply failed message=%s user=%s result=%s",
-                message_id,
-                user_id,
-                result.get("result"),
+        for part_number, content in enumerate(reply_parts, start=1):
+            result = await asyncio.to_thread(
+                self.sender_client.send_message,
+                {"type": "private", "to": [sender_email], "content": content},
             )
-        else:
-            logger.info(
-                "enrollment reply sent message=%s user=%s",
-                message_id,
-                user_id,
-            )
+            if isinstance(result, dict) and result.get("result") != "success":
+                logger.error(
+                    "enrollment reply failed message=%s user=%s part=%s/%s result=%s",
+                    message_id,
+                    user_id,
+                    part_number,
+                    len(reply_parts),
+                    result.get("result"),
+                )
+            else:
+                logger.info(
+                    "enrollment reply sent message=%s user=%s part=%s/%s",
+                    message_id,
+                    user_id,
+                    part_number,
+                    len(reply_parts),
+                )
 
     def _listen_forever(self) -> None:
         self.listener_client.call_on_each_event(callback=self.process_event, event_types=["message"])
