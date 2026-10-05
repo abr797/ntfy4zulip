@@ -101,8 +101,17 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ntfy.calls[0]["user_id"], 42)
         self.assertEqual(len(client.messages), 3)
         self.assertEqual(client.messages[0]["to"], ["bob@example.com"])
-        self.assertIn("Использовать другой сервер", client.messages[0]["content"])
-        self.assertIn("секретный токен", client.messages[0]["content"])
+        instructions = client.messages[0]["content"]
+        self.assertIn("Использовать другой сервер", instructions)
+        self.assertIn("секретный токен", instructions)
+        self.assertLess(
+            instructions.index("секретный токен"),
+            instructions.index("Использовать другой сервер"),
+        )
+        self.assertLess(
+            instructions.index("Использовать другой сервер"),
+            instructions.index("адрес из второго сообщения"),
+        )
         self.assertNotIn("https://ntfy.example", client.messages[0]["content"])
         self.assertNotIn(topic, client.messages[0]["content"])
         self.assertEqual(client.messages[1]["content"], "https://ntfy.example")
