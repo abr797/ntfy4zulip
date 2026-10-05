@@ -52,7 +52,7 @@ Any 1:1 DM to the configured Generic bot causes the bot to:
 4. send the public ntfy server URL as a separate message containing only the URL;
 5. send the personal topic/token as a separate message containing only that token.
 
-The instructions tell the user to add a subscription in the ntfy mobile app, enable "Use another server", paste the server URL from the second message, and paste the secret topic/token from the third message into the Topic field. Keeping the URL and token in separate plain messages makes both values easy to copy without editing surrounding text.
+The instructions tell the user to add a subscription in the ntfy mobile app, first paste the secret topic/token from the third message into the Topic field, then enable "Use another server", and finally paste the server URL from the second message. Keeping the URL and token in separate plain messages makes both values easy to copy without editing surrounding text.
 
 Publishing does not require a public ntfy FQDN. `NTFY_PUBLISH_URL` is the endpoint used by the service itself and may be an internal Docker URL such as `http://ntfy:80`. `NTFY_PUBLIC_URL` is optional and is only shown to users. If it is not configured yet, the bot still sends the test notification to the internal ntfy server, but it does not expose the internal publish URL or the secret topic to the user and instead explains that the mobile client cannot be configured yet.
 
