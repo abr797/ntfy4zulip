@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 
 import aiohttp
 
-from .links import candidate_message_url
 from .messages import notification_text
 from .models import NotificationCandidate
 from .ntfy import NtfyClient
@@ -33,7 +32,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ntfy-token", default=os.getenv("NTFY_AUTH_TOKEN") or None)
     parser.add_argument("--topic-prefix", default=os.getenv("NTFY_TOPIC_PREFIX", "zulip"))
     parser.add_argument("--topic-secret", default=os.getenv("TOPIC_SECRET"))
-    parser.add_argument("--zulip-site", default="https://zulip.example")
     return parser
 
 
@@ -57,15 +55,20 @@ async def send_demo(args: argparse.Namespace) -> bool:
     )
     topic = topic_for_user(args.user_id, args.topic_secret, args.topic_prefix)
     title, message = notification_text(candidate, 800)
-    click = candidate_message_url(args.zulip_site, candidate)
-
     async with aiohttp.ClientSession() as session:
         ntfy = NtfyClient(
             session=session,
             host=args.ntfy_publish_url,
             auth_token=args.ntfy_token,
         )
-        ok = await ntfy.send(topic=topic, title=title, message=message, click=click)
+        ok = await ntfy.send(
+            topic=topic,
+            title=title,
+            message=message,
+            source="demo",
+            message_id=candidate.message_id,
+            user_id=args.user_id,
+        )
 
     print(f"topic={topic}")
     print("result=sent" if ok else "result=failed")

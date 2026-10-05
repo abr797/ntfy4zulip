@@ -42,8 +42,14 @@ async def run(config: Config) -> None:
         except NotImplementedError:
             pass
 
+    logger.info("Zulip API configured site=%s", config.zulip_site)
     bot_user_id = await _get_bot_user_id(config.zuliprc_path)
     logger.info("scoping DB poller to realm of Zulip bot user_id=%s", bot_user_id)
+    logger.info(
+        "ntfy publisher configured endpoint=%s auth=%s",
+        config.ntfy_publish_url,
+        "bearer" if config.ntfy_auth_token else "none",
+    )
 
     async with aiohttp.ClientSession() as session:
         ntfy = NtfyClient(

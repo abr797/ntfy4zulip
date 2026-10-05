@@ -61,6 +61,8 @@ Any 1:1 DM to the Generic bot is treated as an enrollment/diagnostic request:
 3. send a test push immediately;
 4. reply with topic + instructions and, if configured, the public client URL.
 
+The listener keeps a bounded in-memory set of recently accepted Zulip DM message IDs. If the Zulip event queue delivers the same message event again while the process is alive, the duplicate is ignored before another test push is scheduled. This deduplication is intentionally ephemeral and is reset on process restart.
+
 The service can publish entirely over a local Docker network without a public ntfy
 FQDN. `NTFY_PUBLIC_URL` is optional and independent from the internal
 `NTFY_PUBLISH_URL`.
@@ -72,6 +74,8 @@ discovery.
 ## State
 
 Persistent application state: **none**.
+
+Ephemeral application state: a bounded in-memory set of enrollment DM message IDs used only to suppress duplicate event delivery during the current process lifetime.
 
 Persistent secrets/configuration:
 
