@@ -48,9 +48,13 @@ Any 1:1 DM to the configured Generic bot causes the bot to:
 
 1. derive the sender's personal topic;
 2. publish a test notification to it immediately;
-3. reply in Zulip with the personal topic and, when configured, the public ntfy server address.
+3. send setup instructions in Zulip;
+4. send the public ntfy server URL as a separate message containing only the URL;
+5. send the personal topic/token as a separate message containing only that token.
 
-Publishing does not require a public ntfy FQDN. `NTFY_PUBLISH_URL` is the endpoint used by the service itself and may be an internal Docker URL such as `http://ntfy:80`. `NTFY_PUBLIC_URL` is optional and is only shown to users. If it is not configured yet, the bot still sends the test notification to the internal ntfy server and returns the user's topic, but explains that an external client cannot be configured until a public address exists.
+The instructions tell the user to add a subscription in the ntfy mobile app, enable "Use another server", paste the server URL from the second message, and paste the secret topic/token from the third message into the Topic field. Keeping the URL and token in separate plain messages makes both values easy to copy without editing surrounding text.
+
+Publishing does not require a public ntfy FQDN. `NTFY_PUBLISH_URL` is the endpoint used by the service itself and may be an internal Docker URL such as `http://ntfy:80`. `NTFY_PUBLIC_URL` is optional and is only shown to users. If it is not configured yet, the bot still sends the test notification to the internal ntfy server, but it does not expose the internal publish URL or the secret topic to the user and instead explains that the mobile client cannot be configured yet.
 
 Channel messages and group DMs to the bot are ignored. Repeating a new DM returns the same topic and sends another test push, making the bot a simple self-service diagnostic endpoint. Duplicate delivery of the same Zulip DM message ID is suppressed in memory for the lifetime of the process. The bot can remain a normal Generic bot; organization-admin privileges are not required in DB-backed mode.
 
