@@ -5,7 +5,6 @@ import logging
 from datetime import datetime, timezone
 
 from .database import ZulipDatabase
-from .links import candidate_message_url
 from .messages import notification_text
 from .ntfy import NtfyClient
 from .topics import topic_for_user
@@ -55,7 +54,6 @@ class NotificationPoller:
                     self.topic_prefix,
                 )
                 title, message = notification_text(candidate, self.preview_chars)
-                click = candidate_message_url(self.zulip_site, candidate)
             except Exception:
                 build_failures += 1
                 logger.exception(
@@ -71,7 +69,9 @@ class NotificationPoller:
                         topic=topic,
                         title=title,
                         message=message,
-                        click=click,
+                        source="poller",
+                        message_id=candidate.message_id,
+                        user_id=candidate.target_user_id,
                     )
                 )
             )

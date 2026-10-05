@@ -61,6 +61,28 @@ class NtfyTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(kwargs["json"]["markdown"])
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer tk_test")
 
+    async def test_success_log_uses_topic_fingerprint_not_topic_or_token(self):
+        client = await self.make_client(FakeSession())
+        with self.assertLogs("ntfy4zulip.ntfy", level="INFO") as captured:
+            self.assertTrue(
+                await client.send(
+                    topic="zulip_sensitive_topic",
+                    title="test",
+                    message="test",
+                    source="poller",
+                    message_id=123,
+                    user_id=42,
+                )
+            )
+
+        output = "\n".join(captured.output)
+        self.assertIn("source=poller", output)
+        self.assertIn("message=123", output)
+        self.assertIn("user=42", output)
+        self.assertIn("topic_fp=", output)
+        self.assertNotIn("zulip_sensitive_topic", output)
+        self.assertNotIn("tk_test", output)
+
     async def test_http_500_returns_false(self):
         client = await self.make_client(FakeSession(status=500))
         self.assertFalse(

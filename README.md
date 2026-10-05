@@ -52,7 +52,7 @@ Any 1:1 DM to the configured Generic bot causes the bot to:
 
 Publishing does not require a public ntfy FQDN. `NTFY_PUBLISH_URL` is the endpoint used by the service itself and may be an internal Docker URL such as `http://ntfy:80`. `NTFY_PUBLIC_URL` is optional and is only shown to users. If it is not configured yet, the bot still sends the test notification to the internal ntfy server and returns the user's topic, but explains that an external client cannot be configured until a public address exists.
 
-Channel messages and group DMs to the bot are ignored. Repeating the DM returns the same topic and sends another test push, making the bot a simple self-service diagnostic endpoint. The bot can remain a normal Generic bot; organization-admin privileges are not required in DB-backed mode.
+Channel messages and group DMs to the bot are ignored. Repeating a new DM returns the same topic and sends another test push, making the bot a simple self-service diagnostic endpoint. Duplicate delivery of the same Zulip DM message ID is suppressed in memory for the lifetime of the process. The bot can remain a normal Generic bot; organization-admin privileges are not required in DB-backed mode.
 
 ## Install
 
@@ -127,14 +127,11 @@ There is intentionally no Redis, local state database, watermark, persistent que
 
 These choices intentionally favor a simple timely-notification service over delayed recovery. The messages themselves remain in Zulip.
 
-## Deep links
+## Notification taps
 
-The link encoder follows the documented Zulip narrow-URL format:
+ntfy notification payloads currently omit the `click` field. Tapping a notification therefore does not deliberately open the Zulip web UI in a browser. Browser URLs were more disruptive than useful on mobile, so click actions stay disabled until a native/app deep-link strategy is available.
 
-- channel: `#narrow/channel/<id-name>/topic/<topic>/near/<message_id>`
-- DM: `#narrow/dm/<sorted-user-ids>[-group]/near/<message_id>`
-
-Reference: https://zulip.com/api/zulip-urls
+The existing Zulip narrow-URL encoder is retained as groundwork for that future integration, but its output is not attached to normal or demo ntfy notifications.
 
 ## Demo without Zulip
 
@@ -152,7 +149,7 @@ NTFY_PUBLISH_URL=http://127.0.0.1:8081 \
 ntfy4zulip-demo --user-id 42
 ```
 
-This exercises topic derivation, notification formatting, deep-link generation and ntfy HTTP transport without Zulip or PostgreSQL.
+This exercises topic derivation, notification formatting and ntfy HTTP transport without Zulip or PostgreSQL.
 
 ## Tests
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,8 @@ from .ntfy import NtfyClient
 from .topics import topic_for_user
 
 logger = logging.getLogger(__name__)
+
+_SEEN_DM_LIMIT = 10_000
 
 
 class EnrollmentBot:
@@ -35,12 +38,30 @@ class EnrollmentBot:
         self.sender_client: Any = None
         self.bot_email: str | None = None
 
+        self._seen_dm_ids: set[int] = set()
+        self._seen_dm_order: deque[int] = deque()
+        self._seen_dm_lock = threading.Lock()
+
     @staticmethod
     def _is_one_to_one_dm(message: dict[str, Any]) -> bool:
         if message.get("type") not in {"private", "direct"}:
             return False
         recipients = message.get("display_recipient")
         return isinstance(recipients, list) and len(recipients) == 2
+
+    def _remember_dm(self, message_id: int) -> bool:
+        """Return False if this Zulip DM message was already handled."""
+        with self._seen_dm_lock:
+            if message_id in self._seen_dm_ids:
+                return False
+
+            if len(self._seen_dm_order) >= _SEEN_DM_LIMIT:
+                oldest = self._seen_dm_order.popleft()
+                self._seen_dm_ids.discard(oldest)
+
+            self._seen_dm_order.append(message_id)
+            self._seen_dm_ids.add(message_id)
+            return True
 
     def process_event(self, event: dict[str, Any]) -> None:
         if event.get("type") != "message":
@@ -52,14 +73,34 @@ class EnrollmentBot:
             return
 
         try:
+            message_id = int(message["id"])
             user_id = int(message["sender_id"])
             sender_email = str(message["sender_email"])
         except (KeyError, TypeError, ValueError):
             logger.warning("ignored malformed Zulip DM event")
             return
 
+        if not self._remember_dm(message_id):
+            logger.warning(
+                "duplicate enrollment DM ignored message=%s user=%s",
+                message_id,
+                user_id,
+            )
+            return
+
+        logger.info(
+            "enrollment DM accepted message=%s user=%s timestamp=%s",
+            message_id,
+            user_id,
+            message.get("timestamp"),
+        )
+
         future = asyncio.run_coroutine_threadsafe(
-            self._handle_dm(user_id=user_id, sender_email=sender_email),
+            self._handle_dm(
+                message_id=message_id,
+                user_id=user_id,
+                sender_email=sender_email,
+            ),
             self.loop,
         )
 
@@ -67,11 +108,21 @@ class EnrollmentBot:
             try:
                 done_future.result()
             except Exception:
-                logger.exception("failed to handle enrollment DM")
+                logger.exception(
+                    "failed to handle enrollment DM message=%s user=%s",
+                    message_id,
+                    user_id,
+                )
 
         future.add_done_callback(log_failure)
 
-    async def _handle_dm(self, *, user_id: int, sender_email: str) -> None:
+    async def _handle_dm(
+        self,
+        *,
+        message_id: int,
+        user_id: int,
+        sender_email: str,
+    ) -> None:
         topic = topic_for_user(user_id, self.topic_secret, self.topic_prefix)
         test_ok = await self.ntfy.send(
             topic=topic,
@@ -79,6 +130,15 @@ class EnrollmentBot:
             message="Тестовое уведомление ntfy4zulip. Если вы его видите, подписка работает.",
             priority=4,
             tags=("white_check_mark", "bell"),
+            source="enrollment",
+            message_id=message_id,
+            user_id=user_id,
+        )
+        logger.info(
+            "enrollment test publish completed message=%s user=%s sent=%s",
+            message_id,
+            user_id,
+            test_ok,
         )
 
         if test_ok:
@@ -114,7 +174,18 @@ class EnrollmentBot:
             {"type": "private", "to": [sender_email], "content": content},
         )
         if isinstance(result, dict) and result.get("result") != "success":
-            logger.error("failed to send enrollment reply: %r", result)
+            logger.error(
+                "enrollment reply failed message=%s user=%s result=%s",
+                message_id,
+                user_id,
+                result.get("result"),
+            )
+        else:
+            logger.info(
+                "enrollment reply sent message=%s user=%s",
+                message_id,
+                user_id,
+            )
 
     def _listen_forever(self) -> None:
         self.listener_client.call_on_each_event(callback=self.process_event, event_types=["message"])

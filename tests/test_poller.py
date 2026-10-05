@@ -57,13 +57,16 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
             topic_prefix="zulip",
         )
 
-    async def test_scan_sends_one_push_per_candidate(self):
+    async def test_scan_sends_one_push_per_candidate_without_browser_click(self):
         ntfy = FakeNtfy()
         poller = self.make_poller(FakeDatabase([channel_candidate()]), ntfy)
         sent, failed = await poller.scan_once()
         self.assertEqual((sent, failed), (1, 0))
         self.assertEqual(len(ntfy.calls), 1)
-        self.assertIn("/#narrow/channel/", ntfy.calls[0]["click"])
+        self.assertNotIn("click", ntfy.calls[0])
+        self.assertEqual(ntfy.calls[0]["source"], "poller")
+        self.assertEqual(ntfy.calls[0]["message_id"], 100)
+        self.assertEqual(ntfy.calls[0]["user_id"], 2)
 
     async def test_duplicate_pair_in_same_scan_is_suppressed(self):
         c = channel_candidate()
@@ -74,7 +77,7 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(ntfy.calls), 1)
 
     async def test_malformed_candidate_does_not_block_good_candidate(self):
-        malformed = channel_candidate(message_id=99, stream_id=None)
+        malformed = channel_candidate(message_id=99, target_user_id=0)
         good = channel_candidate(message_id=100)
         ntfy = FakeNtfy()
         poller = self.make_poller(FakeDatabase([malformed, good]), ntfy)

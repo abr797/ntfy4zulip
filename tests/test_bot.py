@@ -47,17 +47,58 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(EnrollmentBot._is_one_to_one_dm(group))
         self.assertFalse(EnrollmentBot._is_one_to_one_dm(stream))
 
+    async def test_duplicate_dm_message_id_is_suppressed(self):
+        bot = self.make_bot(FakeNtfy())
+        self.assertTrue(bot._remember_dm(123))
+        self.assertFalse(bot._remember_dm(123))
+        self.assertTrue(bot._remember_dm(124))
+
+    async def test_duplicate_event_is_not_scheduled_twice(self):
+        bot = self.make_bot(FakeNtfy())
+        calls = []
+
+        async def fake_handle_dm(**kwargs):
+            calls.append(kwargs)
+
+        bot._handle_dm = fake_handle_dm
+        event = {
+            "type": "message",
+            "message": {
+                "id": 777,
+                "type": "private",
+                "sender_id": 42,
+                "sender_email": "bob@example.com",
+                "timestamp": 1_700_000_000,
+                "display_recipient": [{"id": 42}, {"id": 99}],
+            },
+        }
+
+        bot.process_event(event)
+        bot.process_event(event)
+        await asyncio.sleep(0.01)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["message_id"], 777)
+        self.assertEqual(calls[0]["user_id"], 42)
+
     async def test_dm_sends_test_push_and_instruction(self):
         ntfy = FakeNtfy()
         bot = self.make_bot(ntfy)
         client = FakeZulipClient()
         bot.sender_client = client
 
-        await bot._handle_dm(user_id=42, sender_email="bob@example.com")
+        await bot._handle_dm(
+            message_id=1001,
+            user_id=42,
+            sender_email="bob@example.com",
+        )
 
         self.assertEqual(len(ntfy.calls), 1)
         topic = ntfy.calls[0]["topic"]
         self.assertTrue(topic.startswith("zulip_"))
+        self.assertEqual(ntfy.calls[0]["source"], "enrollment")
+        self.assertEqual(ntfy.calls[0]["message_id"], 1001)
+        self.assertEqual(ntfy.calls[0]["user_id"], 42)
         self.assertEqual(client.messages[0]["to"], ["bob@example.com"])
         self.assertIn(topic, client.messages[0]["content"])
         self.assertIn("https://ntfy.example", client.messages[0]["content"])
@@ -69,7 +110,11 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         client = FakeZulipClient()
         bot.sender_client = client
 
-        await bot._handle_dm(user_id=42, sender_email="bob@example.com")
+        await bot._handle_dm(
+            message_id=1002,
+            user_id=42,
+            sender_email="bob@example.com",
+        )
 
         self.assertEqual(len(client.messages), 1)
         self.assertIn("zulip_", client.messages[0]["content"])
@@ -81,7 +126,11 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         client = FakeZulipClient()
         bot.sender_client = client
 
-        await bot._handle_dm(user_id=42, sender_email="bob@example.com")
+        await bot._handle_dm(
+            message_id=1003,
+            user_id=42,
+            sender_email="bob@example.com",
+        )
 
         self.assertEqual(len(ntfy.calls), 1)
         topic = ntfy.calls[0]["topic"]
@@ -93,4 +142,8 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
     async def test_zulip_send_error_is_logged_but_does_not_raise(self):
         bot = self.make_bot(FakeNtfy())
         bot.sender_client = FakeZulipClient(result={"result": "error", "msg": "temporary"})
-        await bot._handle_dm(user_id=42, sender_email="bob@example.com")
+        await bot._handle_dm(
+            message_id=1004,
+            user_id=42,
+            sender_email="bob@example.com",
+        )
