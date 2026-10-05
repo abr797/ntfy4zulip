@@ -47,7 +47,7 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(EnrollmentBot._is_one_to_one_dm(group))
         self.assertFalse(EnrollmentBot._is_one_to_one_dm(stream))
 
-    def test_duplicate_dm_message_id_is_suppressed(self):
+    async def test_duplicate_dm_message_id_is_suppressed(self):
         bot = self.make_bot(FakeNtfy())
         self.assertTrue(bot._remember_dm(123))
         self.assertFalse(bot._remember_dm(123))
