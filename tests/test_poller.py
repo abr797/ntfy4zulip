@@ -7,16 +7,25 @@ from ntfy4zulip.poller import NotificationPoller
 
 
 class FakeDatabase:
-    def __init__(self, candidates=None, error=None):
+    def __init__(self, candidates=None, error=None, still_unread=None, recheck_error=None):
         self.candidates = candidates or []
         self.error = error
+        self.still_unread = still_unread
+        self.recheck_error = recheck_error
         self.calls = 0
+        self.recheck_calls = []
 
     def fetch_candidates(self):
         self.calls += 1
         if self.error is not None:
             raise self.error
         return self.candidates
+
+    def recheck_unread(self, pairs):
+        self.recheck_calls.append(list(pairs))
+        if self.recheck_error is not None:
+            raise self.recheck_error
+        return set(pairs) if self.still_unread is None else self.still_unread
 
 
 class FakeNtfy:
@@ -68,6 +77,42 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ntfy.calls[0]["message_id"], 100)
         self.assertEqual(ntfy.calls[0]["user_id"], 2)
 
+    async def test_message_read_after_scan_is_not_published(self):
+        ntfy = FakeNtfy()
+        database = FakeDatabase([channel_candidate()], still_unread=set())
+        poller = self.make_poller(database, ntfy)
+
+        with self.assertLogs("ntfy4zulip.poller", level="INFO") as captured:
+            self.assertEqual(await poller.scan_once(), (0, 0))
+
+        self.assertEqual(ntfy.calls, [])
+        self.assertEqual(database.recheck_calls, [[(100, 2)]])
+        self.assertIn("skipped_not_unread=1", "\n".join(captured.output))
+
+    async def test_recheck_is_per_user_even_for_same_message(self):
+        ntfy = FakeNtfy()
+        database = FakeDatabase(
+            [channel_candidate(target_user_id=2), channel_candidate(target_user_id=3)],
+            still_unread={(100, 2)},
+        )
+        poller = self.make_poller(database, ntfy)
+
+        self.assertEqual(await poller.scan_once(), (1, 0))
+        self.assertEqual([call["user_id"] for call in ntfy.calls], [2])
+        self.assertEqual(database.recheck_calls, [[(100, 2), (100, 3)]])
+
+    async def test_recheck_failure_aborts_without_publishing(self):
+        ntfy = FakeNtfy()
+        database = FakeDatabase(
+            [channel_candidate()],
+            recheck_error=RuntimeError("database unavailable"),
+        )
+        poller = self.make_poller(database, ntfy)
+
+        with self.assertRaisesRegex(RuntimeError, "database unavailable"):
+            await poller.scan_once()
+        self.assertEqual(ntfy.calls, [])
+
     async def test_duplicate_pair_in_same_scan_is_suppressed(self):
         c = channel_candidate()
         ntfy = FakeNtfy()
@@ -84,6 +129,7 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
         sent, failed = await poller.scan_once()
         self.assertEqual((sent, failed), (1, 1))
         self.assertEqual(len(ntfy.calls), 1)
+        self.assertEqual(poller.database.recheck_calls, [[(100, 2)]])
 
     async def test_database_failure_does_not_terminate_run_loop(self):
         database = FakeDatabase(error=RuntimeError("database offline"))

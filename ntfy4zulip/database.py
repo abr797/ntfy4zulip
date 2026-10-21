@@ -60,6 +60,17 @@ WHERE
 ORDER BY m.id, um.user_profile_id
 """
 
+# Recheck exact (message_id, user_id) pairs with a new PostgreSQL snapshot.
+# Both arrays are zipped by unnest, not combined as a Cartesian product.
+UNREAD_RECHECK_QUERY = """
+SELECT um.message_id, um.user_profile_id
+FROM unnest(%s::bigint[], %s::bigint[]) AS requested(message_id, user_profile_id)
+JOIN zerver_usermessage AS um
+    ON um.message_id = requested.message_id
+   AND um.user_profile_id = requested.user_profile_id
+WHERE (um.flags & 1) = 0
+"""
+
 
 def _candidate_from_row(row: Mapping[str, object]) -> NotificationCandidate:
     raw_ids = row.get("dm_user_ids") or []
@@ -229,3 +240,24 @@ class ZulipDatabase:
                     )
                     rows = cur.fetchall()
         return [_candidate_from_row(row) for row in rows]
+
+    def recheck_unread(self, pairs: list[tuple[int, int]]) -> set[tuple[int, int]]:
+        """Recheck fresh committed unread flags for exact candidate pairs.
+
+        Read or missing rows are not returned. Errors must abort publishing.
+        """
+        if not pairs:
+            return set()
+
+        import psycopg
+
+        message_ids, user_ids = zip(*pairs, strict=True)
+        with psycopg.connect(self.dsn, connect_timeout=self.timeout_seconds) as conn:
+            with conn.transaction():
+                conn.execute("SET TRANSACTION READ ONLY")
+                self._configure_session(conn)
+                rows = conn.execute(
+                    UNREAD_RECHECK_QUERY,
+                    (list(message_ids), list(user_ids)),
+                ).fetchall()
+        return {(int(message_id), int(user_id)) for message_id, user_id in rows}

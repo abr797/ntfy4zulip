@@ -1,7 +1,11 @@
 import unittest
 from datetime import datetime, timezone
 
-from ntfy4zulip.database import UNREAD_NOTIFICATION_QUERY, _candidate_from_row
+from ntfy4zulip.database import (
+    UNREAD_NOTIFICATION_QUERY,
+    UNREAD_RECHECK_QUERY,
+    _candidate_from_row,
+)
 
 
 class DatabaseTests(unittest.TestCase):
@@ -10,6 +14,12 @@ class DatabaseTests(unittest.TestCase):
         self.assertIn("date_trunc('minute', CURRENT_TIMESTAMP)", UNREAD_NOTIFICATION_QUERY)
         self.assertIn("target.is_active = TRUE", UNREAD_NOTIFICATION_QUERY)
         self.assertIn("m.realm_id", UNREAD_NOTIFICATION_QUERY)
+
+    def test_recheck_uses_exact_pairs_and_unread_bit(self):
+        self.assertIn("unnest(%s::bigint[], %s::bigint[])", UNREAD_RECHECK_QUERY)
+        self.assertIn("um.message_id = requested.message_id", UNREAD_RECHECK_QUERY)
+        self.assertIn("um.user_profile_id = requested.user_profile_id", UNREAD_RECHECK_QUERY)
+        self.assertIn("(um.flags & 1) = 0", UNREAD_RECHECK_QUERY)
 
     def test_row_mapping(self):
         c = _candidate_from_row(
