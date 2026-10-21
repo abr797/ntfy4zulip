@@ -6,6 +6,8 @@ A stateless external service for self-hosted Zulip Server 12.2 that sends unread
 
 Once per minute, the service queries the Zulip PostgreSQL database for `UserMessage` rows whose messages were sent in the closed minute bucket approximately 3–4 minutes ago and whose `read` flag is still unset. Each `(message_id, user_id)` row is sent to that user's deterministic ntfy topic.
 
+Immediately before publishing each scan's notifications, the service performs a second, batched, read-only PostgreSQL query for the exact `(message_id, user_id)` candidates. If a message was marked read between the two queries, its push is suppressed. Read or missing rows are counted as `skipped_not_unread`; a failed recheck aborts the scan without publishing any unchecked notifications. This narrows the race window but cannot prevent reading a message just after the recheck, or delayed delivery by ntfy. Rechecking adds one SQL round trip per nonempty scan, not one per notification.
+
 The service deliberately does **not** catch up after downtime and does **not** reconstruct missing `UserMessage` rows for `long_term_idle` users. It is intended to run as a single instance.
 
 Covered by the same query:

@@ -37,7 +37,7 @@ class NotificationPoller:
         logger.info("notification scan found %d unread candidates", len(candidates))
 
         seen: set[tuple[int, int]] = set()
-        tasks: list[asyncio.Task[bool]] = []
+        prepared: list[tuple[tuple[int, int], str, str, str]] = []
         build_failures = 0
 
         for candidate in candidates:
@@ -63,6 +63,34 @@ class NotificationPoller:
                 )
                 continue
 
+            prepared.append((key, topic, title, message))
+
+        if not prepared:
+            if build_failures:
+                logger.info(
+                    "notification scan completed sent=0 skipped_not_unread=0 failed=%d",
+                    build_failures,
+                )
+            return 0, build_failures
+
+        # No publish tasks start until a second read-only SQL query succeeds.
+        # Failure is fatal for this scan: never send with unverified read state.
+        still_unread = await asyncio.to_thread(
+            self.database.recheck_unread,
+            [key for key, _, _, _ in prepared],
+        )
+
+        tasks: list[asyncio.Task[bool]] = []
+        skipped_not_unread = 0
+        for key, topic, title, message in prepared:
+            if key not in still_unread:
+                skipped_not_unread += 1
+                logger.info(
+                    "notification skipped no_longer_unread message=%s user=%s",
+                    *key,
+                )
+                continue
+
             tasks.append(
                 asyncio.create_task(
                     self.ntfy.send(
@@ -70,19 +98,21 @@ class NotificationPoller:
                         title=title,
                         message=message,
                         source="poller",
-                        message_id=candidate.message_id,
-                        user_id=candidate.target_user_id,
+                        message_id=key[0],
+                        user_id=key[1],
                     )
                 )
             )
 
-        if not tasks:
-            return 0, build_failures
-
         results = await asyncio.gather(*tasks)
         sent = sum(1 for result in results if result)
         failed = len(results) - sent + build_failures
-        logger.info("notification scan completed sent=%d failed=%d", sent, failed)
+        logger.info(
+            "notification scan completed sent=%d skipped_not_unread=%d failed=%d",
+            sent,
+            skipped_not_unread,
+            failed,
+        )
         return sent, failed
 
     async def run(self, stop_event: asyncio.Event) -> None:

@@ -234,6 +234,26 @@ class DatabaseIntegrationTests(unittest.TestCase):
     def test_real_postgresql_query_filters_and_maps_candidates(self):
         self.assert_candidate_set(self.make_db(DSN).fetch_candidates())
 
+    def test_recheck_filters_newly_read_and_missing_rows(self):
+        db = self.make_db(DSN)
+        pairs = [(1006, 2), (1006, 3), (1002, 2), (999999, 2)]
+        self.assertEqual(db.recheck_unread(pairs), {(1006, 2), (1006, 3)})
+        self.assertEqual(db.recheck_unread([]), set())
+
+        # Simulate the user reading one group DM after the original scan.
+        with self.conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE {SCHEMA}.zerver_usermessage SET flags = flags | 1 "
+                "WHERE message_id = 1006 AND user_profile_id = 3"
+            )
+            try:
+                self.assertEqual(db.recheck_unread(pairs), {(1006, 2)})
+            finally:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.zerver_usermessage SET flags = flags & ~1 "
+                    "WHERE message_id = 1006 AND user_profile_id = 3"
+                )
+
     def test_reference_sql_file_executes_against_zulip_schema(self):
         import psycopg
         from psycopg.rows import dict_row
@@ -257,6 +277,7 @@ class DatabaseIntegrationTests(unittest.TestCase):
         db = self.make_db(READONLY_DSN)
         self.assertEqual(db.validate_access(), "ntfy4zulip_reader_test")
         self.assert_candidate_set(db.fetch_candidates())
+        self.assertEqual(db.recheck_unread([(1001, 2), (1002, 2)]), {(1001, 2)})
 
         with psycopg.connect(READONLY_DSN) as conn:
             public_create = bool(
