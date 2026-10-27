@@ -15,6 +15,7 @@ SELECT
     m.sender_id,
     sender.full_name AS sender_full_name,
     um.user_profile_id AS target_user_id,
+    um.flags AS user_message_flags,
     target.full_name AS target_full_name,
     m.content,
     m.subject AS topic_name,
@@ -91,6 +92,7 @@ def _candidate_from_row(row: Mapping[str, object]) -> NotificationCandidate:
         stream_name=str(row["stream_name"]) if row.get("stream_name") is not None else None,
         folder_name=str(row["folder_name"]) if row.get("folder_name") is not None else None,
         dm_user_ids=tuple(int(user_id) for user_id in raw_ids),
+        user_message_flags=int(row.get("user_message_flags") or 0),
     )
 
 

@@ -29,7 +29,12 @@ class Config:
     ntfy_timeout_seconds: float = 10.0
     message_preview_chars: int = 800
     db_timeout_seconds: int = 15
-    ntfy_default_priority: int = 4
+    ntfy_default_priority: int = 2
+    ntfy_mention_priority: int = 4
+    ntfy_wildcard_mention_priority: int = 3
+    ntfy_dm_priority: int = 4
+    ntfy_group_dm_priority: int = 3
+    ntfy_test_priority: int = 3
     ntfy_folder_priorities: dict[str, int] = field(default_factory=dict)
 
 
@@ -173,7 +178,23 @@ def load_config(base_dir: Path | None = None) -> Config:
         message_preview_chars=_positive_int("MESSAGE_PREVIEW_CHARS", 800),
         db_timeout_seconds=_positive_int("DB_TIMEOUT_SECONDS", 15),
         ntfy_default_priority=_ntfy_priority(
-            "NTFY_DEFAULT_PRIORITY", os.getenv("NTFY_DEFAULT_PRIORITY", "4")
+            "NTFY_DEFAULT_PRIORITY", os.getenv("NTFY_DEFAULT_PRIORITY", "2")
+        ),
+        ntfy_mention_priority=_ntfy_priority(
+            "NTFY_MENTION_PRIORITY", os.getenv("NTFY_MENTION_PRIORITY", "4")
+        ),
+        ntfy_wildcard_mention_priority=_ntfy_priority(
+            "NTFY_WILDCARD_MENTION_PRIORITY",
+            os.getenv("NTFY_WILDCARD_MENTION_PRIORITY", "3"),
+        ),
+        ntfy_dm_priority=_ntfy_priority(
+            "NTFY_DM_PRIORITY", os.getenv("NTFY_DM_PRIORITY", "4")
+        ),
+        ntfy_group_dm_priority=_ntfy_priority(
+            "NTFY_GROUP_DM_PRIORITY", os.getenv("NTFY_GROUP_DM_PRIORITY", "3")
+        ),
+        ntfy_test_priority=_ntfy_priority(
+            "NTFY_TEST_PRIORITY", os.getenv("NTFY_TEST_PRIORITY", "3")
         ),
         ntfy_folder_priorities=_folder_priorities(os.getenv("NTFY_FOLDER_PRIORITIES", "")),
     )

@@ -52,13 +52,25 @@ def channel_candidate(**overrides):
         stream_name="dev",
         dm_user_ids=(),
     folder_name=None,
+    user_message_flags=0,
     )
     values.update(overrides)
     return NotificationCandidate(**values)
 
 
 class PollerTests(unittest.IsolatedAsyncioTestCase):
-    def make_poller(self, database, ntfy=None, *, folder_priorities=None, default_priority=4):
+    def make_poller(
+        self,
+        database,
+        ntfy=None,
+        *,
+        folder_priorities=None,
+        default_priority=2,
+        mention_priority=4,
+        wildcard_mention_priority=3,
+        dm_priority=4,
+        group_dm_priority=3,
+    ):
         return NotificationPoller(
             database=database,
             ntfy=ntfy or FakeNtfy(),
@@ -66,6 +78,10 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
             topic_secret="x" * 32,
             topic_prefix="zulip",
             default_priority=default_priority,
+            mention_priority=mention_priority,
+            wildcard_mention_priority=wildcard_mention_priority,
+            dm_priority=dm_priority,
+            group_dm_priority=group_dm_priority,
             folder_priorities=folder_priorities,
         )
 
@@ -79,7 +95,7 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ntfy.calls[0]["source"], "poller")
         self.assertEqual(ntfy.calls[0]["message_id"], 100)
         self.assertEqual(ntfy.calls[0]["user_id"], 2)
-        self.assertEqual(ntfy.calls[0]["priority"], 4)
+        self.assertEqual(ntfy.calls[0]["priority"], 2)
 
     async def test_global_folder_priority_applies_to_every_recipient(self):
         ntfy = FakeNtfy()
@@ -109,7 +125,68 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
             default_priority=2,
         )
         self.assertEqual(await poller.scan_once(), (3, 0))
-        self.assertEqual([call["priority"] for call in ntfy.calls], [2, 2, 2])
+        self.assertEqual([call["priority"] for call in ntfy.calls], [2, 2, 3])
+
+    async def test_type_priority_then_folder_only_escalates(self):
+        ntfy = FakeNtfy()
+        cases = [
+            channel_candidate(message_id=201, folder_name="Quiet"),
+            channel_candidate(message_id=202, folder_name="Critical"),
+            channel_candidate(message_id=203, folder_name="Quiet", user_message_flags=1 << 3),
+            channel_candidate(message_id=204, folder_name="Critical", user_message_flags=1 << 3),
+            channel_candidate(message_id=205, folder_name="Quiet", user_message_flags=1 << 4),
+            channel_candidate(message_id=206, folder_name="Critical", user_message_flags=1 << 5),
+            channel_candidate(message_id=207, folder_name="Quiet", user_message_flags=1 << 6),
+            channel_candidate(
+                message_id=208,
+                folder_name="Quiet",
+                user_message_flags=(1 << 3) | (1 << 4),
+            ),
+        ]
+        poller = self.make_poller(
+            FakeDatabase(cases),
+            ntfy,
+            folder_priorities={"quiet": 1, "CRITICAL": 5},
+        )
+        self.assertEqual(await poller.scan_once(), (len(cases), 0))
+        self.assertEqual(
+            [call["priority"] for call in ntfy.calls],
+            [2, 5, 4, 5, 3, 5, 4, 4],
+        )
+
+    async def test_one_to_one_and_group_dm_have_distinct_priority(self):
+        ntfy = FakeNtfy()
+        cases = [
+            channel_candidate(
+                message_id=300, is_channel_message=False, dm_user_ids=(1, 2)
+            ),
+            channel_candidate(
+                message_id=301, is_channel_message=False, dm_user_ids=(1, 2, 3)
+            ),
+        ]
+        poller = self.make_poller(
+            FakeDatabase(cases),
+            ntfy,
+            folder_priorities={"Critical": 5},
+        )
+        self.assertEqual(await poller.scan_once(), (2, 0))
+        self.assertEqual([call["priority"] for call in ntfy.calls], [4, 3])
+
+    async def test_custom_type_priority_values(self):
+        ntfy = FakeNtfy()
+        cases = [
+            channel_candidate(message_id=301, user_message_flags=(1 << 3) | (1 << 4)),
+            channel_candidate(message_id=302, user_message_flags=1 << 3),
+            channel_candidate(message_id=303, user_message_flags=1 << 5),
+        ]
+        poller = self.make_poller(
+            FakeDatabase(cases),
+            ntfy,
+            mention_priority=2,
+            wildcard_mention_priority=5,
+        )
+        self.assertEqual(await poller.scan_once(), (3, 0))
+        self.assertEqual([call["priority"] for call in ntfy.calls], [5, 2, 5])
 
     async def test_message_read_after_scan_is_not_published(self):
         ntfy = FakeNtfy()

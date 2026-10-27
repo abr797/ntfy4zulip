@@ -6,10 +6,15 @@ from datetime import datetime, timezone
 
 from .database import ZulipDatabase
 from .messages import notification_text
+from .models import NotificationCandidate
 from .ntfy import NtfyClient
 from .topics import topic_for_user
 
 logger = logging.getLogger(__name__)
+
+# Zulip Server 12.2: AbstractUserMessage.ALL_FLAGS indexes 3..6.
+_DIRECT_MENTION_MASK = (1 << 3) | (1 << 6)  # @user and @group
+_WILDCARD_MENTION_MASK = (1 << 4) | (1 << 5)  # @all / @everyone
 
 
 class NotificationPoller:
@@ -23,7 +28,11 @@ class NotificationPoller:
         topic_prefix: str,
         preview_chars: int = 800,
         poll_interval_seconds: int = 60,
-        default_priority: int = 4,
+        default_priority: int = 2,
+        mention_priority: int = 4,
+        wildcard_mention_priority: int = 3,
+        dm_priority: int = 4,
+        group_dm_priority: int = 3,
         folder_priorities: dict[str, int] | None = None,
     ) -> None:
         self.database = database
@@ -34,10 +43,37 @@ class NotificationPoller:
         self.preview_chars = preview_chars
         self.poll_interval_seconds = poll_interval_seconds
         self.default_priority = default_priority
+        self.mention_priority = mention_priority
+        self.wildcard_mention_priority = wildcard_mention_priority
+        self.dm_priority = dm_priority
+        self.group_dm_priority = group_dm_priority
         self.folder_priorities = {
             name.strip().casefold(): priority
             for name, priority in (folder_priorities or {}).items()
         }
+
+    def priority_for_candidate(self, candidate: NotificationCandidate) -> int:
+        """Classify notification first; folder priority can only raise it."""
+        if not candidate.is_channel_message:
+            return self.dm_priority if len(candidate.dm_user_ids) == 2 else self.group_dm_priority
+
+        flags = candidate.user_message_flags
+        if flags & _DIRECT_MENTION_MASK:
+            priority = self.mention_priority
+            if flags & _WILDCARD_MENTION_MASK:
+                priority = max(priority, self.wildcard_mention_priority)
+        elif flags & _WILDCARD_MENTION_MASK:
+            priority = self.wildcard_mention_priority
+        else:
+            priority = self.default_priority
+
+        if candidate.folder_name:
+            folder_priority = self.folder_priorities.get(
+                candidate.folder_name.strip().casefold()
+            )
+            if folder_priority is not None:
+                priority = max(priority, folder_priority)
+        return priority
 
     async def scan_once(self) -> tuple[int, int]:
         candidates = await asyncio.to_thread(self.database.fetch_candidates)
@@ -61,11 +97,7 @@ class NotificationPoller:
                     self.topic_prefix,
                 )
                 title, message = notification_text(candidate, self.preview_chars)
-                priority = self.default_priority
-                if candidate.is_channel_message and candidate.folder_name:
-                    priority = self.folder_priorities.get(
-                        candidate.folder_name.strip().casefold(), priority
-                    )
+                priority = self.priority_for_candidate(candidate)
             except Exception:
                 build_failures += 1
                 logger.exception(

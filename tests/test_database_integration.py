@@ -171,7 +171,7 @@ class DatabaseIntegrationTests(unittest.TestCase):
             INSERT INTO zerver_usermessage (user_profile_id, message_id, flags)
             VALUES
                 (1, 1001, 0),
-                (2, 1001, 0),
+                (2, 1001, 8),
                 (2, 1002, 1),
                 (2, 1003, 0),
                 (2, 1004, 0),
@@ -236,6 +236,8 @@ class DatabaseIntegrationTests(unittest.TestCase):
         self.assertEqual(channel.stream_id, 10)
         self.assertEqual(channel.stream_name, "development")
         self.assertEqual(channel.folder_name, "Operations")
+        # User 2 received a direct @mention; the first query must expose its bit.
+        self.assertEqual(channel.user_message_flags, 8)
 
         dm = next(item for item in candidates if item.message_id == 1005)
         self.assertFalse(dm.is_channel_message)

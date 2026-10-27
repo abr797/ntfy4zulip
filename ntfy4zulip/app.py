@@ -78,6 +78,10 @@ async def run(config: Config) -> None:
             preview_chars=config.message_preview_chars,
             poll_interval_seconds=config.poll_interval_seconds,
             default_priority=config.ntfy_default_priority,
+            mention_priority=config.ntfy_mention_priority,
+            wildcard_mention_priority=config.ntfy_wildcard_mention_priority,
+            dm_priority=config.ntfy_dm_priority,
+            group_dm_priority=config.ntfy_group_dm_priority,
             folder_priorities=config.ntfy_folder_priorities,
         )
         bot = EnrollmentBot(
@@ -86,6 +90,7 @@ async def run(config: Config) -> None:
             ntfy_public_url=config.ntfy_public_url,
             topic_secret=config.topic_secret,
             topic_prefix=config.ntfy_topic_prefix,
+            test_priority=config.ntfy_test_priority,
             loop=loop,
         )
 

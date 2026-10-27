@@ -44,40 +44,64 @@ HMAC-SHA256(TOPIC_SECRET, "zulip-user:<user_id>")
 
 The numeric user ID is not exposed in the topic. The current token keeps 192 bits of HMAC output. `TOPIC_SECRET` must be backed up; changing it changes every user's topic.
 
-## Global folder priorities
+## Notification priorities and global folder escalation
 
-ntfy priority can be configured for every Zulip channel folder **globally for all users**.
-Zulip 12.2 stores each channel's shared folder in `zerver_stream.folder_id`,
-which references `zerver_channelfolder`. The bridge reads the folder name
-from the same read-only PostgreSQL query as other notification data.
-
-Example `.env` or Compose `env_file` configuration:
+Notification priority is selected **first by message type**, then (for channel
+messages) by the channel's global Zulip folder. The final priority is the
+**maximum** of the type priority and the configured folder priority, so a folder
+can only make an alert *more* important, never silence or downgrade a mention.
 
 ```dotenv
-NTFY_DEFAULT_PRIORITY=4
+# Defaults — all are global for the organization
+NTFY_DEFAULT_PRIORITY=2
+NTFY_MENTION_PRIORITY=4
+NTFY_WILDCARD_MENTION_PRIORITY=3
+NTFY_DM_PRIORITY=4
+NTFY_GROUP_DM_PRIORITY=3
+NTFY_TEST_PRIORITY=3
+
+# Optional priorities by shared Zulip folder name
 NTFY_FOLDER_PRIORITIES='{"Дежурство":5,"Новости":2,"Работа":3}'
 ```
 
-Priority values: `1` minimal, `2` low, `3` default, `4` high, `5` maximum.
-Folder names are matched case-insensitively, and the JSON object must contain
-only integer priorities from 1 to 5. Invalid configuration prevents startup.
+The priorities 1–5 mean minimal, low, normal, high, and maximum:
 
-A channel's folder priority overrides the default for all recipients. Channels
-without a folder (or without a configured folder priority) and all direct/group
-DMs use `NTFY_DEFAULT_PRIORITY`. Enrollment test pushes retain priority 4.
-There are no per-user settings or new persistent application state. Renaming a
-folder requires updating its name in `NTFY_FOLDER_PRIORITIES`.
+- Ordinary channel message: `NTFY_DEFAULT_PRIORITY` (2)
+- Direct `@user` mention or group `@group` mention: `NTFY_MENTION_PRIORITY` (4)
+- Channel-wide/topic-wide `@all` / `@everyone` mention:
+  `NTFY_WILDCARD_MENTION_PRIORITY` (3)
+- 1:1 direct message: `NTFY_DM_PRIORITY` (4)
+- Group direct message: `NTFY_GROUP_DM_PRIORITY` (3)
+- Enrollment test push: `NTFY_TEST_PRIORITY` (3)
 
-**Upgrade:** existing PostgreSQL read-only roles must also be granted `SELECT`
-on `zerver_channelfolder`:
+Zulip 12.2 stores mention flags in `zerver_usermessage.flags` for each
+recipient (bit 3 direct mention, bits 4/5 wildcard, bit 6 group mention).
+If multiple mention types are present, the higher of the applicable
+configured priorities wins. Classification uses those flags, not message text.
+
+For channel messages, a configured folder priority is applied **after**
+classification: `priority = max(type_priority, folder_priority)`.
+For example, an ordinary message in «Дежурство» receives priority 5,
+while an `@user` mention in «Новости» receives priority 4, not 2.
+Direct messages have no channel folder; no folder rule applies.
+
+Zulip stores channels' shared folders in `zerver_stream.folder_id` →
+`zerver_channelfolder`. Folder configuration is **global for all users**;
+names match case-insensitively. When a folder is renamed, update the JSON
+mapping. Every configured priority must be an integer from 1 to 5;
+invalid values abort startup. No state database or user preferences are added.
+
+**Upgrade:** existing PostgreSQL read-only roles need `SELECT` on
+`zerver_channelfolder` before deploying:
 
 ```sql
 GRANT SELECT ON TABLE zulip.zerver_channelfolder TO ntfy4zulip;
 ```
 
-Replace `zulip` with your configured `ZULIP_DB_SCHEMA` and `ntfy4zulip`
-with your actual read-only PostgreSQL role. The application's startup permission
-validation now requires access to this table.
+Replace `zulip` with `ZULIP_DB_SCHEMA` and `ntfy4zulip` with
+your actual PostgreSQL reader role. Startup permission validation checks
+the additional table.
+
 
 ## Onboarding bot
 

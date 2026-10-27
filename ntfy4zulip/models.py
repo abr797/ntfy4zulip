@@ -19,3 +19,4 @@ class NotificationCandidate:
     stream_name: str | None
     dm_user_ids: tuple[int, ...]
     folder_name: str | None = None
+    user_message_flags: int = 0
