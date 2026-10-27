@@ -107,7 +107,7 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await poller.scan_once(), (2, 0))
         self.assertEqual([call["priority"] for call in ntfy.calls], [5, 5])
 
-    async def test_unconfigured_folder_and_direct_messages_use_global_default(self):
+    async def test_unconfigured_folder_uses_channel_default_and_dm_ignores_folders(self):
         ntfy = FakeNtfy()
         database = FakeDatabase([
             channel_candidate(message_id=101, folder_name="Other"),
@@ -115,6 +115,7 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
             channel_candidate(
                 message_id=103,
                 is_channel_message=False,
+                dm_user_ids=(1, 2, 3),
                 folder_name="Operations",
             ),
         ])
@@ -171,6 +172,13 @@ class PollerTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(await poller.scan_once(), (2, 0))
         self.assertEqual([call["priority"] for call in ntfy.calls], [4, 3])
+
+    async def test_unknown_dm_participants_keep_higher_dm_priority(self):
+        ntfy = FakeNtfy()
+        cases = [channel_candidate(message_id=400, is_channel_message=False)]
+        poller = self.make_poller(FakeDatabase(cases), ntfy)
+        self.assertEqual(await poller.scan_once(), (1, 0))
+        self.assertEqual(ntfy.calls[0]["priority"], 4)
 
     async def test_custom_type_priority_values(self):
         ntfy = FakeNtfy()

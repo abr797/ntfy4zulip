@@ -55,7 +55,8 @@ class NotificationPoller:
     def priority_for_candidate(self, candidate: NotificationCandidate) -> int:
         """Classify notification first; folder priority can only raise it."""
         if not candidate.is_channel_message:
-            return self.dm_priority if len(candidate.dm_user_ids) == 2 else self.group_dm_priority
+            # An incomplete recipient list should not silently downgrade a DM.
+            return self.group_dm_priority if len(candidate.dm_user_ids) > 2 else self.dm_priority
 
         flags = candidate.user_message_flags
         if flags & _DIRECT_MENTION_MASK:
