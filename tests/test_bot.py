@@ -26,7 +26,7 @@ class FakeZulipClient:
 
 
 class BotTests(unittest.IsolatedAsyncioTestCase):
-    def make_bot(self, ntfy, public_url="https://ntfy.example"):
+    def make_bot(self, ntfy, public_url="https://ntfy.example", test_priority=3):
         return EnrollmentBot(
             zuliprc_path=Path("zuliprc"),
             ntfy=ntfy,
@@ -34,6 +34,7 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
             topic_secret="x" * 32,
             topic_prefix="zulip",
             loop=asyncio.get_running_loop(),
+            test_priority=test_priority,
         )
 
     def test_only_one_to_one_dm_is_accepted(self):
@@ -97,6 +98,7 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         topic = ntfy.calls[0]["topic"]
         self.assertTrue(topic.startswith("zulip_"))
         self.assertEqual(ntfy.calls[0]["source"], "enrollment")
+        self.assertEqual(ntfy.calls[0]["priority"], 3)
         self.assertEqual(ntfy.calls[0]["message_id"], 1001)
         self.assertEqual(ntfy.calls[0]["user_id"], 42)
         self.assertEqual(len(client.messages), 3)
@@ -116,6 +118,17 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(topic, client.messages[0]["content"])
         self.assertEqual(client.messages[1]["content"], "https://ntfy.example")
         self.assertEqual(client.messages[2]["content"], topic)
+
+    async def test_custom_test_priority_is_used(self):
+        ntfy = FakeNtfy()
+        bot = self.make_bot(ntfy, test_priority=5)
+        bot.sender_client = FakeZulipClient()
+        await bot._handle_dm(
+            message_id=2001,
+            user_id=42,
+            sender_email="bob@example.com",
+        )
+        self.assertEqual(ntfy.calls[0]["priority"], 5)
 
     async def test_ntfy_failure_still_returns_topic_and_failure_status(self):
         ntfy = FakeNtfy(result=False)

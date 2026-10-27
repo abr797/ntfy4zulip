@@ -52,6 +52,20 @@ lookup is required.
 
 There is no state between scans. Missing scans are not replayed.
 
+## Global folder priority
+
+The initial read-only scan joins `zerver_stream.folder_id` to
+`zerver_channelfolder` to include the shared channel folder name. A single
+global `NTFY_FOLDER_PRIORITIES` JSON mapping (folder name to ntfy priority 1–5)
+sets a common priority for everyone. The bridge first classifies the message as
+ordinary channel, direct mention, wildcard mention, 1:1 DM, or group DM using
+Zulip per-recipient `UserMessage.flags` and DM participant count. Each class
+has a configurable global priority (ordinary channel defaults to 2). For channel
+messages the folder rule can only raise that priority:
+`max(classification_priority, folder_priority)`. DM priority is unaffected
+by folder rules. Enrollment test pushes default to 3. No per-user settings
+are stored.
+
 ## Enrollment path
 
 Any 1:1 DM to the Generic bot is treated as an enrollment/diagnostic request:

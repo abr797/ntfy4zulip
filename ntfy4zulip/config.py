@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import configparser
+import json
 import os
 import re
 import sys
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -28,6 +29,13 @@ class Config:
     ntfy_timeout_seconds: float = 10.0
     message_preview_chars: int = 800
     db_timeout_seconds: int = 15
+    ntfy_default_priority: int = 2
+    ntfy_mention_priority: int = 4
+    ntfy_wildcard_mention_priority: int = 3
+    ntfy_dm_priority: int = 4
+    ntfy_group_dm_priority: int = 3
+    ntfy_test_priority: int = 3
+    ntfy_folder_priorities: dict[str, int] = field(default_factory=dict)
 
 
 def _base_dir() -> Path:
@@ -54,6 +62,41 @@ def _positive_int(name: str, default: int) -> int:
     if value <= 0:
         raise ValueError(f"{name} must be > 0")
     return value
+
+
+def _ntfy_priority(name: str, raw: str) -> int:
+    try:
+        value = int(raw.strip())
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer between 1 and 5") from exc
+    if not 1 <= value <= 5:
+        raise ValueError(f"{name} must be between 1 and 5")
+    return value
+
+
+def _folder_priorities(raw: str) -> dict[str, int]:
+    if not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("NTFY_FOLDER_PRIORITIES must be a JSON object") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("NTFY_FOLDER_PRIORITIES must be a JSON object")
+
+    result: dict[str, int] = {}
+    for name, priority in parsed.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("NTFY_FOLDER_PRIORITIES keys must be nonempty folder names")
+        if type(priority) is not int or not 1 <= priority <= 5:
+            raise ValueError(
+                f"NTFY_FOLDER_PRIORITIES priority for {name!r} must be an integer from 1 to 5"
+            )
+        key = name.strip().casefold()
+        if key in result:
+            raise ValueError(f"NTFY_FOLDER_PRIORITIES repeats folder name {name!r}")
+        result[key] = priority
+    return result
 
 
 def _db_schema(value: str) -> str:
@@ -134,4 +177,24 @@ def load_config(base_dir: Path | None = None) -> Config:
         ntfy_timeout_seconds=_positive_float("NTFY_TIMEOUT_SECONDS", 10.0),
         message_preview_chars=_positive_int("MESSAGE_PREVIEW_CHARS", 800),
         db_timeout_seconds=_positive_int("DB_TIMEOUT_SECONDS", 15),
+        ntfy_default_priority=_ntfy_priority(
+            "NTFY_DEFAULT_PRIORITY", os.getenv("NTFY_DEFAULT_PRIORITY", "2")
+        ),
+        ntfy_mention_priority=_ntfy_priority(
+            "NTFY_MENTION_PRIORITY", os.getenv("NTFY_MENTION_PRIORITY", "4")
+        ),
+        ntfy_wildcard_mention_priority=_ntfy_priority(
+            "NTFY_WILDCARD_MENTION_PRIORITY",
+            os.getenv("NTFY_WILDCARD_MENTION_PRIORITY", "3"),
+        ),
+        ntfy_dm_priority=_ntfy_priority(
+            "NTFY_DM_PRIORITY", os.getenv("NTFY_DM_PRIORITY", "4")
+        ),
+        ntfy_group_dm_priority=_ntfy_priority(
+            "NTFY_GROUP_DM_PRIORITY", os.getenv("NTFY_GROUP_DM_PRIORITY", "3")
+        ),
+        ntfy_test_priority=_ntfy_priority(
+            "NTFY_TEST_PRIORITY", os.getenv("NTFY_TEST_PRIORITY", "3")
+        ),
+        ntfy_folder_priorities=_folder_priorities(os.getenv("NTFY_FOLDER_PRIORITIES", "")),
     )

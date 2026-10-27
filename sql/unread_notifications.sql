@@ -18,6 +18,7 @@ SELECT
     m.is_channel_message,
     stream.id AS stream_id,
     stream.name AS stream_name,
+    folder.name AS folder_name,
     CASE
         WHEN m.is_channel_message THEN NULL
         ELSE ARRAY(
@@ -36,6 +37,8 @@ LEFT JOIN zulip.zerver_stream AS stream
     ON m.is_channel_message
    AND recipient.type = 2
    AND stream.id = recipient.type_id
+LEFT JOIN zulip.zerver_channelfolder AS folder
+    ON folder.id = stream.folder_id
 CROSS JOIN params AS p
 WHERE
     m.date_sent >= date_trunc('minute', CURRENT_TIMESTAMP)

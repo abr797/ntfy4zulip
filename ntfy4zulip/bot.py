@@ -25,6 +25,7 @@ class EnrollmentBot:
         topic_secret: str,
         topic_prefix: str,
         loop: asyncio.AbstractEventLoop,
+        test_priority: int = 3,
     ) -> None:
         self.zuliprc_path = zuliprc_path
         self.ntfy = ntfy
@@ -34,6 +35,7 @@ class EnrollmentBot:
         self.topic_secret = topic_secret
         self.topic_prefix = topic_prefix
         self.loop = loop
+        self.test_priority = test_priority
         self.listener_client: Any = None
         self.sender_client: Any = None
         self.bot_email: str | None = None
@@ -128,7 +130,7 @@ class EnrollmentBot:
             topic=topic,
             title="Zulip push · test",
             message="Тестовое уведомление ntfy4zulip. Если вы его видите, подписка работает.",
-            priority=4,
+            priority=self.test_priority,
             tags=("white_check_mark", "bell"),
             source="enrollment",
             message_id=message_id,

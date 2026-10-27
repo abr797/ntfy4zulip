@@ -19,5 +19,6 @@ GRANT SELECT ON TABLE
     zulip.zerver_userprofile,
     zulip.zerver_recipient,
     zulip.zerver_stream,
+    zulip.zerver_channelfolder,
     zulip.zerver_subscription
 TO ntfy4zulip;

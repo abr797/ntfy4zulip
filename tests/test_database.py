@@ -14,6 +14,9 @@ class DatabaseTests(unittest.TestCase):
         self.assertIn("date_trunc('minute', CURRENT_TIMESTAMP)", UNREAD_NOTIFICATION_QUERY)
         self.assertIn("target.is_active = TRUE", UNREAD_NOTIFICATION_QUERY)
         self.assertIn("m.realm_id", UNREAD_NOTIFICATION_QUERY)
+        self.assertIn("zerver_channelfolder", UNREAD_NOTIFICATION_QUERY)
+        self.assertIn("folder.id = stream.folder_id", UNREAD_NOTIFICATION_QUERY)
+        self.assertIn("um.flags AS user_message_flags", UNREAD_NOTIFICATION_QUERY)
 
     def test_recheck_uses_exact_pairs_and_unread_bit(self):
         self.assertIn("unnest(%s::bigint[], %s::bigint[])", UNREAD_RECHECK_QUERY)
@@ -35,8 +38,12 @@ class DatabaseTests(unittest.TestCase):
                 "is_channel_message": False,
                 "stream_id": None,
                 "stream_name": None,
+                "folder_name": None,
+                "user_message_flags": 8,
                 "dm_user_ids": [10, 11],
             }
         )
         self.assertEqual(c.dm_user_ids, (10, 11))
         self.assertEqual(c.target_user_id, 11)
+        self.assertIsNone(c.folder_name)
+        self.assertEqual(c.user_message_flags, 8)
