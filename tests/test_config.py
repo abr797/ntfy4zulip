@@ -36,6 +36,40 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.poll_interval_seconds, 60)
         self.assertEqual(config.notification_delay_minutes, 3)
         self.assertEqual(config.db_timeout_seconds, 15)
+        self.assertEqual(config.ntfy_default_priority, 4)
+        self.assertEqual(config.ntfy_folder_priorities, {})
+
+    def test_global_folder_priorities_are_parsed_and_casefolded(self):
+        base = self.make_base()
+        env = self.valid_env() | {
+            "NTFY_DEFAULT_PRIORITY": "3",
+            "NTFY_FOLDER_PRIORITIES": '{"Дежурство":5,"НОВОСТИ":2}',
+        }
+        with patch.dict(os.environ, env, clear=True):
+            config = load_config(base)
+        self.assertEqual(config.ntfy_default_priority, 3)
+        self.assertEqual(config.ntfy_folder_priorities, {"дежурство": 5, "новости": 2})
+
+    def test_invalid_priority_settings_rejected(self):
+        base = self.make_base()
+        invalid = [
+            {"NTFY_DEFAULT_PRIORITY": "0"},
+            {"NTFY_DEFAULT_PRIORITY": "6"},
+            {"NTFY_DEFAULT_PRIORITY": "high"},
+            {"NTFY_FOLDER_PRIORITIES": "invalid json"},
+            {"NTFY_FOLDER_PRIORITIES": "[]"},
+            {"NTFY_FOLDER_PRIORITIES": '{"News":0}'},
+            {"NTFY_FOLDER_PRIORITIES": '{"News":6}'},
+            {"NTFY_FOLDER_PRIORITIES": '{"News":"5"}'},
+            {"NTFY_FOLDER_PRIORITIES": '{"News":true}'},
+            {"NTFY_FOLDER_PRIORITIES": '{"  ":4}'},
+            {"NTFY_FOLDER_PRIORITIES": '{"News":3,"news":4}'},
+        ]
+        for override in invalid:
+            with self.subTest(override=override):
+                with patch.dict(os.environ, self.valid_env() | override, clear=True):
+                    with self.assertRaisesRegex(ValueError, "NTFY_"):
+                        load_config(base)
 
     def test_missing_topic_secret_is_rejected(self):
         base = self.make_base()

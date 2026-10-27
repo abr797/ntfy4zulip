@@ -70,23 +70,25 @@ class NtfyClient:
                     if 200 <= response.status < 300:
                         logger.info(
                             "ntfy publish succeeded status=%s source=%s "
-                            "message=%s user=%s topic_fp=%s",
+                            "message=%s user=%s topic_fp=%s priority=%s",
                             response.status,
                             source,
                             message_id,
                             user_id,
                             topic_fp,
+                            priority,
                         )
                         return True
                     body = await response.text()
                     logger.error(
                         "ntfy publish failed status=%s source=%s message=%s "
-                        "user=%s topic_fp=%s body=%r",
+                        "user=%s topic_fp=%s priority=%s body=%r",
                         response.status,
                         source,
                         message_id,
                         user_id,
                         topic_fp,
+                        priority,
                         body[:500],
                     )
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:

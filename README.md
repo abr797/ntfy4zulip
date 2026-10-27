@@ -44,6 +44,41 @@ HMAC-SHA256(TOPIC_SECRET, "zulip-user:<user_id>")
 
 The numeric user ID is not exposed in the topic. The current token keeps 192 bits of HMAC output. `TOPIC_SECRET` must be backed up; changing it changes every user's topic.
 
+## Global folder priorities
+
+ntfy priority can be configured for every Zulip channel folder **globally for all users**.
+Zulip 12.2 stores each channel's shared folder in `zerver_stream.folder_id`,
+which references `zerver_channelfolder`. The bridge reads the folder name
+from the same read-only PostgreSQL query as other notification data.
+
+Example `.env` or Compose `env_file` configuration:
+
+```dotenv
+NTFY_DEFAULT_PRIORITY=4
+NTFY_FOLDER_PRIORITIES='{"Дежурство":5,"Новости":2,"Работа":3}'
+```
+
+Priority values: `1` minimal, `2` low, `3` default, `4` high, `5` maximum.
+Folder names are matched case-insensitively, and the JSON object must contain
+only integer priorities from 1 to 5. Invalid configuration prevents startup.
+
+A channel's folder priority overrides the default for all recipients. Channels
+without a folder (or without a configured folder priority) and all direct/group
+DMs use `NTFY_DEFAULT_PRIORITY`. Enrollment test pushes retain priority 4.
+There are no per-user settings or new persistent application state. Renaming a
+folder requires updating its name in `NTFY_FOLDER_PRIORITIES`.
+
+**Upgrade:** existing PostgreSQL read-only roles must also be granted `SELECT`
+on `zerver_channelfolder`:
+
+```sql
+GRANT SELECT ON TABLE zulip.zerver_channelfolder TO ntfy4zulip;
+```
+
+Replace `zulip` with your configured `ZULIP_DB_SCHEMA` and `ntfy4zulip`
+with your actual read-only PostgreSQL role. The application's startup permission
+validation now requires access to this table.
+
 ## Onboarding bot
 
 Any 1:1 DM to the configured Generic bot causes the bot to:

@@ -21,6 +21,7 @@ SELECT
     m.is_channel_message,
     stream.id AS stream_id,
     stream.name AS stream_name,
+    folder.name AS folder_name,
     CASE
         WHEN m.is_channel_message THEN NULL
         ELSE ARRAY(
@@ -43,6 +44,8 @@ LEFT JOIN zerver_stream AS stream
     ON m.is_channel_message
    AND recipient.type = 2
    AND stream.id = recipient.type_id
+LEFT JOIN zerver_channelfolder AS folder
+    ON folder.id = stream.folder_id
 WHERE
     m.date_sent >= date_trunc('minute', CURRENT_TIMESTAMP)
                    - (%s + 1) * INTERVAL '1 minute'
@@ -86,6 +89,7 @@ def _candidate_from_row(row: Mapping[str, object]) -> NotificationCandidate:
         is_channel_message=bool(row["is_channel_message"]),
         stream_id=int(row["stream_id"]) if row.get("stream_id") is not None else None,
         stream_name=str(row["stream_name"]) if row.get("stream_name") is not None else None,
+        folder_name=str(row["folder_name"]) if row.get("folder_name") is not None else None,
         dm_user_ids=tuple(int(user_id) for user_id in raw_ids),
     )
 
@@ -97,6 +101,7 @@ class ZulipDatabase:
         "zerver_userprofile",
         "zerver_recipient",
         "zerver_stream",
+        "zerver_channelfolder",
         "zerver_subscription",
     )
 

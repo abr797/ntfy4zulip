@@ -23,6 +23,8 @@ class NotificationPoller:
         topic_prefix: str,
         preview_chars: int = 800,
         poll_interval_seconds: int = 60,
+        default_priority: int = 4,
+        folder_priorities: dict[str, int] | None = None,
     ) -> None:
         self.database = database
         self.ntfy = ntfy
@@ -31,13 +33,18 @@ class NotificationPoller:
         self.topic_prefix = topic_prefix
         self.preview_chars = preview_chars
         self.poll_interval_seconds = poll_interval_seconds
+        self.default_priority = default_priority
+        self.folder_priorities = {
+            name.strip().casefold(): priority
+            for name, priority in (folder_priorities or {}).items()
+        }
 
     async def scan_once(self) -> tuple[int, int]:
         candidates = await asyncio.to_thread(self.database.fetch_candidates)
         logger.info("notification scan found %d unread candidates", len(candidates))
 
         seen: set[tuple[int, int]] = set()
-        prepared: list[tuple[tuple[int, int], str, str, str]] = []
+        prepared: list[tuple[tuple[int, int], str, str, str, int]] = []
         build_failures = 0
 
         for candidate in candidates:
@@ -54,6 +61,11 @@ class NotificationPoller:
                     self.topic_prefix,
                 )
                 title, message = notification_text(candidate, self.preview_chars)
+                priority = self.default_priority
+                if candidate.is_channel_message and candidate.folder_name:
+                    priority = self.folder_priorities.get(
+                        candidate.folder_name.strip().casefold(), priority
+                    )
             except Exception:
                 build_failures += 1
                 logger.exception(
@@ -63,7 +75,7 @@ class NotificationPoller:
                 )
                 continue
 
-            prepared.append((key, topic, title, message))
+            prepared.append((key, topic, title, message, priority))
 
         if not prepared:
             if build_failures:
@@ -77,12 +89,12 @@ class NotificationPoller:
         # Failure is fatal for this scan: never send with unverified read state.
         still_unread = await asyncio.to_thread(
             self.database.recheck_unread,
-            [key for key, _, _, _ in prepared],
+            [key for key, _, _, _, _ in prepared],
         )
 
         tasks: list[asyncio.Task[bool]] = []
         skipped_not_unread = 0
-        for key, topic, title, message in prepared:
+        for key, topic, title, message, priority in prepared:
             if key not in still_unread:
                 skipped_not_unread += 1
                 logger.info(
@@ -97,6 +109,7 @@ class NotificationPoller:
                         topic=topic,
                         title=title,
                         message=message,
+                        priority=priority,
                         source="poller",
                         message_id=key[0],
                         user_id=key[1],

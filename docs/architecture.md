@@ -52,6 +52,14 @@ lookup is required.
 
 There is no state between scans. Missing scans are not replayed.
 
+## Global folder priority
+
+The initial read-only scan joins `zerver_stream.folder_id` to
+`zerver_channelfolder` to include the shared channel folder name. A single
+global `NTFY_FOLDER_PRIORITIES` JSON mapping (folder name to ntfy priority 1–5)
+sets a common priority for everyone. All unmatched folders and DMs retain
+`NTFY_DEFAULT_PRIORITY` (4 by default). No per-user settings are stored.
+
 ## Enrollment path
 
 Any 1:1 DM to the Generic bot is treated as an enrollment/diagnostic request:

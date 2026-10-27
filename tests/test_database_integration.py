@@ -45,9 +45,18 @@ class DatabaseIntegrationTests(unittest.TestCase):
         )
         cur.execute(
             """
-            CREATE TABLE zerver_stream (
+            CREATE TABLE zerver_channelfolder (
                 id BIGINT PRIMARY KEY,
                 name TEXT NOT NULL
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE zerver_stream (
+                id BIGINT PRIMARY KEY,
+                name TEXT NOT NULL,
+                folder_id BIGINT REFERENCES zerver_channelfolder(id)
             )
             """
         )
@@ -102,8 +111,14 @@ class DatabaseIntegrationTests(unittest.TestCase):
         )
         cur.execute(
             """
-            INSERT INTO zerver_stream (id, name)
-            VALUES (10, 'development'), (20, 'other realm')
+            INSERT INTO zerver_channelfolder (id, name)
+            VALUES (1, 'Operations'), (2, 'News')
+            """
+        )
+        cur.execute(
+            """
+            INSERT INTO zerver_stream (id, name, folder_id)
+            VALUES (10, 'development', 1), (20, 'other realm', 2)
             """
         )
         cur.execute(
@@ -184,6 +199,7 @@ class DatabaseIntegrationTests(unittest.TestCase):
                     {SCHEMA}.zerver_userprofile,
                     {SCHEMA}.zerver_recipient,
                     {SCHEMA}.zerver_stream,
+                    {SCHEMA}.zerver_channelfolder,
                     {SCHEMA}.zerver_subscription
                 TO ntfy4zulip_reader_test
                 """
@@ -219,10 +235,12 @@ class DatabaseIntegrationTests(unittest.TestCase):
         self.assertTrue(channel.is_channel_message)
         self.assertEqual(channel.stream_id, 10)
         self.assertEqual(channel.stream_name, "development")
+        self.assertEqual(channel.folder_name, "Operations")
 
         dm = next(item for item in candidates if item.message_id == 1005)
         self.assertFalse(dm.is_channel_message)
         self.assertEqual(dm.dm_user_ids, (1, 2))
+        self.assertIsNone(dm.folder_name)
 
         group_dm = next(
             item
